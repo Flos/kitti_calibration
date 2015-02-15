@@ -160,6 +160,34 @@ add_dependencies(gui
   ${PROJECT_NAME}_gencfg
 )
 
+
+add_executable(benchmark_local
+  src/${PROJECT_NAME}/benchmark/benchmark_local.cpp
+)
+
+target_link_libraries(benchmark_local
+  ${catkin_LIBRARIES}
+  kitti
+)
+
+add_dependencies(benchmark_local 
+  ${PROJECT_NAME}_gencfg
+)
+
+add_executable(benchmark_global
+  src/${PROJECT_NAME}/benchmark/benchmark_global.cpp
+)
+
+target_link_libraries(benchmark_global
+  ${catkin_LIBRARIES}
+  kitti
+)
+
+add_dependencies(benchmark_global 
+  ${PROJECT_NAME}_gencfg
+)
+
+
 #############
 ## Install ##
 #############
