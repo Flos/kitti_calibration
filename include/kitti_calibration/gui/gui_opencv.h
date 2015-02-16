@@ -43,7 +43,8 @@ namespace pcl_filter{
 		RANGE_BORDERS = 5,
 		DEPTH_RADIUS = 6,
 		DEPTH_NEIGHBORS = 7,
-		OTHER = 8
+		DEPTH_EDGE_PROJECTION = 8,
+		OTHER = 9
 	};
 }
 
