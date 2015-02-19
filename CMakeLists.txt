@@ -187,6 +187,20 @@ add_dependencies(benchmark_global
   ${PROJECT_NAME}_gencfg
 )
 
+## Create image samples, benchmark times
+add_executable(create_samples
+  src/${PROJECT_NAME}/benchmark/create_samples.cpp
+)
+
+target_link_libraries(create_samples
+  ${catkin_LIBRARIES}
+  kitti
+)
+
+add_dependencies(create_samples
+  ${PROJECT_NAME}_gencfg
+)
+
 
 #############
 ## Install ##
