@@ -24,6 +24,9 @@
 #include <kitti/common/serialization/dataset.h>
 #include <kitti/common/serialization/file_list.h>
 
+
+#include <image_cloud/common/calibration/pipeline/enums.h>
+
 // Own
 #include <kitti_calibration/gui/slider.h>
 
@@ -32,48 +35,8 @@
 
 namespace kitti_calibration {
 
-namespace pcl_filter{
-	enum Filter3d
-	{
-		OFF = 0,
-		DEPTH = 1,
-		DEPTH_INTENSITY = 2,
-		DEPTH_EDGE = 3,
-		NORMAL_DIFF = 4,
-		RANGE_BORDERS = 5,
-		DEPTH_RADIUS = 6,
-		DEPTH_NEIGHBORS = 7,
-		DEPTH_EDGE_PROJECTION = 8,
-		OTHER = 9
-	};
-}
 
 namespace image_filter{
-
-	namespace blur{
-		enum Blur{
-			OFF = 0,
-			BILATERAL = 1,
-			BLUR = 2,
-			GAUSSIAN = 3,
-			MEDIAN = 4
-		};
-	}
-
-	namespace edge{
-		enum Edge{
-			OFF = 0,
-			CANNY = 1,
-			LAPLACE = 2,
-			MAX = 3
-		};
-	}
-
-	namespace enlight{
-		enum Enlight{
-			OFF = 0
-		};
-	}
 
 	enum image_index{
 		FILE_READ = 0,
@@ -93,7 +56,7 @@ namespace image_filter{
 		std::string window_name;
 	};
 
-}
+};
 
 struct Set_selector{
 	kitti::String_list images;

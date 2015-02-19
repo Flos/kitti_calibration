@@ -98,8 +98,8 @@ Gui_opencv::init(){
 	// Default slider values
 	datasets.pos_dataset.init("set", 1, datasets.list_datasets.size() -1);
 	datasets.processed_image_selector.init("processed image", image_filter::IMAGE_FULL, images.size() -1);
-	datasets.filter2d.blur.init("blur filter", image_filter::blur::OFF, filter2d_blur_names.size() -1);
-	datasets.filter2d.edge.init("edge filter", image_filter::edge::MAX, filter2d_edge_names.size() -1);
+	datasets.filter2d.blur.init("blur filter", ::image_filter::blur::OFF, filter2d_blur_names.size() -1);
+	datasets.filter2d.edge.init("edge filter", ::image_filter::edge::MAX, filter2d_edge_names.size() -1);
 	datasets.projection.init("0 = intensity | depth = 1", 0, 1);
 	datasets.pcl_filter.init("pcl filter", pcl_filter::DEPTH_EDGE_PROJECTION ,filter3d_names.size() -1);
 
@@ -182,10 +182,10 @@ void Gui_opencv::init_menu_options() {
 	filter2d_blur_names.push_back("median");
 
 	datasets.filter2d.blur_values.resize(filter2d_blur_names.size());
-	datasets.filter2d.blur_values.at(image_filter::blur::BILATERAL).push_back(Slider("kernel", 2, 40));
-	datasets.filter2d.blur_values.at(image_filter::blur::GAUSSIAN).push_back(Slider("kernel", 2, 40));
-	datasets.filter2d.blur_values.at(image_filter::blur::MEDIAN).push_back(Slider("kernel", 2, 40));
-	datasets.filter2d.blur_values.at(image_filter::blur::BLUR).push_back(Slider("kernel", 2, 40));
+	datasets.filter2d.blur_values.at(::image_filter::blur::BILATERAL).push_back(Slider("kernel", 2, 40));
+	datasets.filter2d.blur_values.at(::image_filter::blur::GAUSSIAN).push_back(Slider("kernel", 2, 40));
+	datasets.filter2d.blur_values.at(::image_filter::blur::MEDIAN).push_back(Slider("kernel", 2, 40));
+	datasets.filter2d.blur_values.at(::image_filter::blur::BLUR).push_back(Slider("kernel", 2, 40));
 
 	filter2d_edge_names.push_back("off");
 	filter2d_edge_names.push_back("canny"); //4
@@ -193,14 +193,14 @@ void Gui_opencv::init_menu_options() {
 	filter2d_edge_names.push_back("max");
 
 	datasets.filter2d.edge_values.resize(filter2d_edge_names.size());
-	datasets.filter2d.edge_values.at(image_filter::edge::CANNY).push_back(Slider("threashold1", 30, 500, 1, 1, false, true));
-	datasets.filter2d.edge_values.at(image_filter::edge::CANNY).push_back(Slider("threashold2", 100, 500, 1, 1, false, true));
-	datasets.filter2d.edge_values.at(image_filter::edge::CANNY).push_back(Slider("apertureSize", 3, 30));
-	datasets.filter2d.edge_values.at(image_filter::edge::CANNY).push_back(Slider("l2gradient?", 0, 1));
+	datasets.filter2d.edge_values.at(::image_filter::edge::CANNY).push_back(Slider("threashold1", 30, 500, 1, 1, false, true));
+	datasets.filter2d.edge_values.at(::image_filter::edge::CANNY).push_back(Slider("threashold2", 100, 500, 1, 1, false, true));
+	datasets.filter2d.edge_values.at(::image_filter::edge::CANNY).push_back(Slider("apertureSize", 3, 30));
+	datasets.filter2d.edge_values.at(::image_filter::edge::CANNY).push_back(Slider("l2gradient?", 0, 1));
 
-	datasets.filter2d.edge_values.at(image_filter::edge::LAPLACE).push_back(Slider("kernel", 3, 30));
-	datasets.filter2d.edge_values.at(image_filter::edge::LAPLACE).push_back(Slider("scale", 1, 30, 1, 1, false, true));
-	datasets.filter2d.edge_values.at(image_filter::edge::LAPLACE).push_back(Slider("delta", 0, 30, 1, 1, false, true));
+	datasets.filter2d.edge_values.at(::image_filter::edge::LAPLACE).push_back(Slider("kernel", 3, 30));
+	datasets.filter2d.edge_values.at(::image_filter::edge::LAPLACE).push_back(Slider("scale", 1, 30, 1, 1, false, true));
+	datasets.filter2d.edge_values.at(::image_filter::edge::LAPLACE).push_back(Slider("delta", 0, 30, 1, 1, false, true));
 
 	assert(datasets.filter2d.blur_values.size() == 5 );
 	assert(datasets.filter2d.blur_values.at(0).size() == 0);
@@ -413,48 +413,48 @@ Gui_opencv::filter2d(){
 	// Pipeline blur;
 	switch(datasets.filter2d.blur.value){
 		default:
-		case image_filter::blur::OFF:
+		case ::image_filter::blur::OFF:
 			images[image_filter::IMAGE_GREY].copyTo(images[image_filter::IMAGE_BLUR]);
 			break;
-		case image_filter::blur::BILATERAL:
+		case ::image_filter::blur::BILATERAL:
 			cv::bilateralFilter ( images[image_filter::IMAGE_GREY], images[image_filter::IMAGE_BLUR],
-					datasets.filter2d.blur_values.at(image_filter::blur::BILATERAL)[0].value,
-					datasets.filter2d.blur_values.at(image_filter::blur::BILATERAL)[0].value*2,
-					datasets.filter2d.blur_values.at(image_filter::blur::BILATERAL)[0].value/2);
+					datasets.filter2d.blur_values.at(::image_filter::blur::BILATERAL)[0].value,
+					datasets.filter2d.blur_values.at(::image_filter::blur::BILATERAL)[0].value*2,
+					datasets.filter2d.blur_values.at(::image_filter::blur::BILATERAL)[0].value/2);
 			break;
-	    case image_filter::blur::BLUR:
-			cv::blur( images[image_filter::IMAGE_GREY], images[image_filter::IMAGE_BLUR], cv::Size( datasets.filter2d.blur_values.at(image_filter::blur::BLUR)[0].value,
-					datasets.filter2d.blur_values.at(image_filter::blur::BLUR)[0].value ), cv::Point(-1,-1) );
+	    case ::image_filter::blur::BLUR:
+			cv::blur( images[image_filter::IMAGE_GREY], images[image_filter::IMAGE_BLUR], cv::Size( datasets.filter2d.blur_values.at(::image_filter::blur::BLUR)[0].value,
+					datasets.filter2d.blur_values.at(::image_filter::blur::BLUR)[0].value ), cv::Point(-1,-1) );
 			break;
-	    case image_filter::blur::GAUSSIAN:
-			cv::GaussianBlur( images[image_filter::IMAGE_GREY], images[image_filter::IMAGE_BLUR], cv::Size( datasets.filter2d.blur_values.at(image_filter::blur::GAUSSIAN)[0].value,
-					datasets.filter2d.blur_values.at(image_filter::blur::GAUSSIAN)[0].value ), 0, 0 );
+	    case ::image_filter::blur::GAUSSIAN:
+			cv::GaussianBlur( images[image_filter::IMAGE_GREY], images[image_filter::IMAGE_BLUR], cv::Size( datasets.filter2d.blur_values.at(::image_filter::blur::GAUSSIAN)[0].value,
+					datasets.filter2d.blur_values.at(::image_filter::blur::GAUSSIAN)[0].value ), 0, 0 );
 			break;
-	    case image_filter::blur::MEDIAN:
-	    	cv::medianBlur ( images[image_filter::IMAGE_GREY], images[image_filter::IMAGE_BLUR], datasets.filter2d.blur_values.at(image_filter::blur::MEDIAN)[0].value );
+	    case ::image_filter::blur::MEDIAN:
+	    	cv::medianBlur ( images[image_filter::IMAGE_GREY], images[image_filter::IMAGE_BLUR], datasets.filter2d.blur_values.at(::image_filter::blur::MEDIAN)[0].value );
 	    	break;
 	}
 
 	switch (datasets.filter2d.edge.value)
 	{
 		default:
-		case image_filter::edge::OFF:
+		case ::image_filter::edge::OFF:
 			images[image_filter::IMAGE_BLUR].copyTo(images[image_filter::IMAGE_EDGE]);
 			break;
-		case image_filter::edge::CANNY:
+		case ::image_filter::edge::CANNY:
 			cv::Canny( images[image_filter::IMAGE_BLUR], images[image_filter::IMAGE_EDGE],
-					datasets.filter2d.edge_values.at(image_filter::edge::CANNY)[0].get_value(),
-					datasets.filter2d.edge_values.at(image_filter::edge::CANNY)[1].get_value(),
-					datasets.filter2d.edge_values.at(image_filter::edge::CANNY)[2].value,
-					datasets.filter2d.edge_values.at(image_filter::edge::CANNY)[3].value );
+					datasets.filter2d.edge_values.at(::image_filter::edge::CANNY)[0].get_value(),
+					datasets.filter2d.edge_values.at(::image_filter::edge::CANNY)[1].get_value(),
+					datasets.filter2d.edge_values.at(::image_filter::edge::CANNY)[2].value,
+					datasets.filter2d.edge_values.at(::image_filter::edge::CANNY)[3].value );
 			break;
-		case image_filter::edge::LAPLACE:
+		case ::image_filter::edge::LAPLACE:
 			cv::Laplacian( images[image_filter::IMAGE_BLUR], images[image_filter::IMAGE_EDGE], images[image_filter::IMAGE_BLUR].type(),
-					datasets.filter2d.edge_values.at(image_filter::edge::LAPLACE)[0].value,
-					datasets.filter2d.edge_values.at(image_filter::edge::LAPLACE)[1].get_value(),
-					datasets.filter2d.edge_values.at(image_filter::edge::LAPLACE)[2].get_value() );
+					datasets.filter2d.edge_values.at(::image_filter::edge::LAPLACE)[0].value,
+					datasets.filter2d.edge_values.at(::image_filter::edge::LAPLACE)[1].get_value(),
+					datasets.filter2d.edge_values.at(::image_filter::edge::LAPLACE)[2].get_value() );
 			break;
-		case image_filter::edge::MAX:
+		case ::image_filter::edge::MAX:
 			filter_2d::edge_max<uchar>( images[image_filter::IMAGE_BLUR], images[image_filter::IMAGE_EDGE]);
 			break;
 	}
@@ -510,7 +510,7 @@ Gui_opencv::filter3d(){
 			break;
 		case pcl_filter::DEPTH:
 		{
-				filter_depth_discontinuity(transformed, filtred,
+			filter_3d::filter_depth_discontinuity(transformed, filtred,
 						datasets.filter3d_data[datasets.pcl_filter.value][0].value, // neighbors
 						datasets.filter3d_data[datasets.pcl_filter.value][1].get_value()); // epsilon
 		}
@@ -518,7 +518,7 @@ Gui_opencv::filter3d(){
 
 		case pcl_filter::DEPTH_INTENSITY:
 		{
-			filter::filter_depth_intensity(map, filtred,
+			filter_3d::filter_depth_intensity(map, filtred,
 					datasets.filter3d_data[datasets.pcl_filter.value][0].get_value(), // depth
 					datasets.filter3d_data[datasets.pcl_filter.value][1].get_value(), // intensity
 					datasets.filter3d_data[datasets.pcl_filter.value][2].value, // neighbors
@@ -572,7 +572,7 @@ Gui_opencv::filter3d(){
 		break;
 		case pcl_filter::OTHER:
 		{
-			filter::segmentation(transformed, filtred);
+			filter_3d::segmentation(transformed, filtred);
 				//filtred = transformed;
 		}
 		break;
@@ -617,8 +617,8 @@ void Gui_opencv::create_gui_filter3d() {
 }
 
 void Gui_opencv::create_gui_filter2d() {
-	if(datasets.filter2d.blur.value != image_filter::blur::OFF
-			||  datasets.filter2d.edge.value != image_filter::edge::OFF )
+	if(datasets.filter2d.blur.value != ::image_filter::blur::OFF
+			||  datasets.filter2d.edge.value != ::image_filter::edge::OFF )
 	{
 		datasets.filter2d.window_name = filter2d_blur_names.at(datasets.filter2d.blur.value) + " " + filter2d_edge_names.at(datasets.filter2d.edge.value);
 		cv::namedWindow(datasets.filter2d.window_name, CV_GUI_NORMAL);
