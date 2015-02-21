@@ -13,171 +13,245 @@
 #include <kitti/common/serialization/dataset.h>
 
 // image_cloud hpp
-#include <image_cloud/common/project2d.hpp>
 #include <image_cloud/common/filter/cv/inverse_distance_transform.hpp>
 #include <image_cloud/common/filter/cv/edge.hpp>
-#include <image_cloud/common/filter/pcl/filter_depth_intensity.hpp>
-#include <image_cloud/common/filter/pcl/segmentation.hpp>
-#include <image_cloud/common/filter/pcl/depth_filter.hpp>
 #include <image_cloud/common/transform.hpp>
-#include <image_cloud/common/calibration/multi_score.hpp>
 #include <image_cloud/common/calibration/score.hpp>
 #include <image_cloud/common/calibration/structs.hpp>
 #include <image_cloud/common/calibration/grid_search.hpp>
 #include <image_cloud/common/calibration/pipeline/image.hpp>
 #include <image_cloud/common/calibration/pipeline/pointcloud.hpp>
+#include <image_cloud/common/calibration/pipeline/enums.h>
 
-void find_tf(std::string dataset, std::string output_file,
-		tf::Transform result, tf::Transform search_startpoint,
-		int min_steps, int max_steps, int max_repeats,
-		float range_axis, float range_rotation,
-		int window_size, int camera,
-		bool pre_filtred) {
+#include <kitti_calibration/common/messure_time.h>
+#include <iostream>
+#include <boost/program_options.hpp>
 
-	// Load kitti dataset
-	kitti::Dataset data(dataset);
+namespace po = boost::program_options;
 
-	std::deque<cv::Mat> images;
-	std::deque<pcl::PointCloud<pcl::PointXYZI> > pointclouds;
-	std::vector<Projected_pointcloud<pcl::PointXYZI> > projected_pointclouds;
+po::variables_map opts;
 
-	// Load camera model
+void run_search(kitti::Dataset data, int camera, int sequence, std::vector<search::Search_value> &results) {
+
 	image_geometry::PinholeCameraModel camera_model;
-	data.camera_list.cameras.at(camera).get_camera_model(camera_model);
-	//Load and prepare data files;
-	for (int i = 0; i < window_size; ++i) {
-		// Load image
-		cv::Mat imgage_load, image_inverse;
-		data.camera_file_list.at(camera).load_image(imgage_load, i);
-		// Grey, edge, inverse transformation;
-		image_cloud::create_inverse_transformed(imgage_load, image_inverse);
-		// Put in array
-		images.push_back(image_inverse);
-		// Done with the image
-		// Calculate TF
-		// Transforms velo_to_cam0
-		tf::Transform velo_to_cam0;
+	data.camera_list.at(camera).get_camera_model(camera_model);
+
+	std::deque<cv::Mat> list_images;
+	std::deque<pcl::PointCloud<pcl::PointXYZI> > list_points;
+	bool pre_filtred = true;
+
+	for(int i = 0; i < opts["window"].as<int>(); ++i){
+		// Load images
+		cv::Mat image_load, image_inverse;
+		data.camera_file_list.at(camera).load_image(image_load, sequence+i);
+
+		// create inverse imageimage_pointcloud::
+		image_cloud::create_inverse_transformed(image_load, image_inverse);
+		list_images.push_back(image_inverse);
+		// Image processing done
+
+		// Load Pointcloud
+		pcl::PointCloud < pcl::PointXYZI > transformed;
+		data.pointcloud_file_list.load_pointcloud(transformed, sequence+i);
+		//
+		//	Transform PointCloud
+		tf::Transform velo_to_cam0,cam0_to_cam;
+
 		data.velodyne_to_cam0.get_transform(velo_to_cam0);
-		// Transform cam0_to_cam
-		tf::Transform cam0_to_cam;
 		data.camera_list.cameras.at(camera).tf_rect.get_transform(cam0_to_cam);
-		// Transform
-		tf::Transform tf = (cam0_to_cam * velo_to_cam0);
-		// Load pointcloud
-		pcl::PointCloud<pcl::PointXYZI> read, transformed, filtred;
-		std::vector<std::vector<boost::shared_ptr<pcl::PointXYZI> > > pointcloud_map(
-				images[i].cols,
-				std::vector<boost::shared_ptr<pcl::PointXYZI> >(
-						images[i].rows));
-		data.pointcloud_file_list.load_pointcloud(read, i);
-		image_cloud::transform_pointcloud<pcl::PointXYZI>(read, transformed,
-				tf);
-		if (pre_filtred) {
-			Projected_pointcloud<pcl::PointXYZI> pointcloud_projected;
-			// To speed up search filter points here.
-			project2d::project_2d(camera_model, transformed, pointcloud_map,
-					pointcloud_projected, image_inverse.cols,
-					image_inverse.rows);
-			filter::filter_depth_intensity<pcl::PointXYZI>(pointcloud_map,
-					filtred, 0.3, 50);
-			pointclouds.push_back(filtred);
-			printf(
-					"Filtred search_startpoint: %lu projected: %lu depth_intesity: %lu\n",
-					transformed.size(), pointcloud_projected.points.size(),
-					filtred.size());
-		} else {
-			pointclouds.push_back(transformed);
+
+		tf::Transform tf_result = (cam0_to_cam * velo_to_cam0);
+
+		image_cloud::transform_pointcloud(transformed, tf_result);
+
+		pcl_filter::Filter3d filter = (pcl_filter::Filter3d)opts["filter"].as<int>();
+
+		// Filter pointclouds once for all TFs
+		if(pre_filtred){
+			pcl::PointCloud < pcl::PointXYZI > points_filtred;
+			image_cloud::filter3d_switch <pcl::PointXYZI > (transformed, points_filtred, camera_model, camera, sequence, filter, image_load.rows, image_load.cols);
+			list_points.push_back(points_filtred);
+		}
+		else{
+			list_points.push_back(transformed);
 		}
 	}
-	//Benchmark processing time
-	std::string spacer = " \t";
-	std::stringstream sum;
-	std::ofstream myfile;
-	myfile.open(output_file.c_str());
-
-	sum << "steps" << spacer;
-	sum << "calculations" << spacer;
-	sum << "repeats" << spacer;
-	sum << "time_total_sec" << spacer;
-	sum << "time_total_nsec" << spacer;
-	sum << "time_single_sec" << spacer;
-	sum << "time_single_nsec" << spacer;
-	sum << "range_axis" << spacer;
-	sum << "range_rotation" << spacer;
-	sum << "prefiltered" << spacer;
-	sum << "best_result\n";
-
-	myfile << sum.str();
-	std::cout << sum.str();
-
-	for (int i = min_steps; i <= max_steps; ++i) {
-		// Preparation:
-		std::stringstream ss;
-		tf::Transform out;
-		search::Multi_search_result result;
-		ros::WallTime time1 = ros::WallTime::now();
-		for (int repeats = 0; repeats < max_repeats; ++repeats) {
-			search::get_best_tf<pcl::PointXYZI, uchar>(search_startpoint, out,
-					camera_model, pointclouds, images, range_axis,
-					range_rotation, i, pre_filtred, &result);
-		}
-		ros::WallTime time2 = ros::WallTime::now();
-		ros::WallTime single_it;
-		ros::WallDuration delta;
-		delta = (time2 - time1);
-		single_it.sec = delta.sec / max_repeats;
-		single_it.nsec = delta.nsec / max_repeats;
-		ss << i << spacer << result.nr_total << spacer;
-		ss << max_repeats << spacer;
-		ss << delta.sec << spacer;
-		ss << delta.nsec << spacer;
-		ss << single_it.sec << spacer;
-		ss << single_it.nsec << spacer;
-		ss << range_axis << spacer;
-		ss << range_rotation << spacer;
-		ss << pre_filtred << spacer;
-		ss << result.to_string() << std::endl;
-		std::cout << result.in.to_string() << "\n";
-		std::cout << result.best.to_string() << "\n";
-		myfile << ss.str();
-		sum << ss;
-	}
-	myfile.close();
+	search::calculate<pcl::PointXYZI,uchar>(camera_model, list_points, list_images, results, pre_filtred );
 }
 
-//using namespace image_cloud;
+int main(int argc, char* argv[]){
+	std::stringstream available_pcl_filters;
+
+	available_pcl_filters << "pcl filter: \n";
+	for (int i = 0; i < pcl_filter::NR_ENUMS; ++i){
+		available_pcl_filters << i << ": " << ToString((pcl_filter::Filter3d)i) << "\n ";
+	}
+	std::vector<float> range;
+	std::vector<float> start;
+	std::vector<int> steps;
+	range.resize(6);
+	start.resize(6);
+	steps.resize(6);
+
+	for (int i = 0; i < 6; ++i){
+		steps[i] = 3;
+		range[i] = 0.01;
+		start[i] = 0;
+	}
+	//std::vector<float>() range {0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
+	po::options_description desc("Usage");
+	desc.add_options()
+	("help", "Print this help messages")
+	("i", po::value<std::string>()->default_value("/media/Daten/kitti/kitti/2011_09_26_drive_0005_sync/"), "kitti dataset to load")
+	("camera", po::value<int>()->default_value(0), "camera nr")
+	("start", po::value<int>()->default_value(0), "sequence number")
+	("window", po::value<int>()->default_value(1), "sliding window size")
+	("range", po::value< std::vector<float> >(&range)->multitoken(), "search range: x y z roll pitch yaw")
+	("steps", po::value< std::vector<int> >(&steps)->multitoken(), "steps: x y z roll pitch yaw")
+	("start_transform", po::value< std::vector <float > >(&start)->multitoken(), "start transforme: x y z roll pitch yaw")
+	("save_images", po::value<bool>()->default_value(true), "write image files")
+	("f", po::value<bool>()->default_value(false), "process full kitti dataset")
+	("p", po::value<std::string>()->default_value(""), "output file prefix")
+	("iterations", po::value<int>()->default_value(1), "optimation iterration (halves search range per iterration")
+	("filter", po::value<int>()->default_value(pcl_filter::DEPTH_INTENSITY), available_pcl_filters.str().c_str())
+	("out",	po::value<std::string>()->default_value(""),"calculation output file");
+
+	//po::store(po::parse_command_line(argc, argv, desc), opts);
+	po::store(parse_command_line(argc, argv, desc, po::command_line_style::unix_style ^ po::command_line_style::allow_short), opts);
 
 
-int main(){
-	tf::Transform expected_calibration, result;
-	result.setIdentity();
-	expected_calibration.setIdentity();
+	try {
+		po::notify(opts);
 
-	// Config;
-	std::string dataset = "/media/Daten/kitti/hit_0006.txt";
-	std::string output_file = dataset + "results.pre_filtred.txt";
+	} catch (std::exception& e) {
+		std::cerr << "Error: " << e.what() << "\n";
+		std::cerr << desc << std::endl;
+		return 1;
+	}
 
-	int min_steps = 3;
-	int max_steps = 5;
-	int max_repeats = 100;
-	float range_axis = 0.04;
-	float range_rotation = 0.04;
-	bool pre_filtred = true;
-	int window_size = 5;
-	int camera = 0;
+    /** --help option
+     */
 
-	expected_calibration.setOrigin(tf::Vector3(0.00, 0.00, 0.00));
+	if ( opts.count("help")  )
+	{
+		std::cout 	<< "Kitti offline edge calibration" << std::endl
+					<< desc << std::endl;
+		return 0;
+	}
 
-	find_tf(dataset, "filtred1.txt"	, result, expected_calibration, min_steps, max_steps, max_repeats, range_axis, range_rotation, window_size, camera, pre_filtred);
-	//std::cout << result;
-	find_tf(dataset, "filtred2.txt"	, result, expected_calibration, min_steps, max_steps, max_repeats, range_axis, range_rotation, window_size, camera, pre_filtred);
+	tf::Transform search_startpoint;
+	tf::Quaternion q;
+	search_startpoint.setIdentity();
+	search_startpoint.setOrigin(tf::Vector3(start[0], start[1], start[2]));
+	q.setRPY(start[3], start[4], start[5]);
+	search_startpoint.setRotation(q);
 
-	pre_filtred = false;
-	find_tf(dataset, "unfiltred1.txt"	, result, expected_calibration, min_steps, max_steps, max_repeats, range_axis, range_rotation, window_size, camera, pre_filtred);
-	find_tf(dataset, "unfiltred2.txt"	, result, expected_calibration, min_steps, max_steps, max_repeats, range_axis, range_rotation, window_size, camera, pre_filtred);
+	kitti::Dataset data(opts["i"].as<std::string>());
 
+	std::vector<search::Search_setup> search_configs;
+	std::vector<search::Multi_search_result> search_results;
+	float factor = 2;
+	//search_startpoint;
+
+	std::ofstream myfile;
+	std::string filename = opts["out"].as<std::string>();
+	if(!filename.empty()){
+		myfile.open(filename.c_str());
+	}
+
+	clock_t clock_start = clock();
+	for(int i = 0; i < opts["iterations"].as<int>(); ++i){
+
+		std::stringstream out;
+		search::Multi_search_result multi_result;
+		std::vector<search::Search_value> results;
+		tf::Transform tmp;
+		tf::Transform best_until_now = search_startpoint;
+
+		factor = factor / 2;
+
+		// resize ranges
+		std::cout << "factor * oldrange = range \t steps \t start \n";
+		for(int j = 0; j<6 ;++j){
+			std::cout << factor << " * " << range[j] << " = ";
+			range[j] = range[j]*factor;
+			std::cout << range[j] << "\t"
+					  << steps[j] << "\t"
+					  << start[j] <<"\n";
+		}
+
+
+
+		// find best tf for next search
+		unsigned int score = 0;
+		for(int j = 0; j < search_results.size(); ++j)
+		{
+			if(score < search_results.at(j).best.score){
+				score = search_results.at(j).best.score;
+
+				search_results.at(j).best.get_transform(best_until_now);
+			}
+		}
+
+		//std::cout << score << "\t\n";
+
+		// setup grid search
+		search::Search_setup search_config(best_until_now, range, steps);
+		//std::cout << "search setup" << search_config.to_string() << std::endl;
+
+		search::grid_setup(search_config, results);
+
+		// store current config
+		search_configs.push_back(search_config);
+
+		// run grid search
+		run_search(data, opts["camera"].as<int>(), opts["start"].as<int>(), results);
+
+		// evaluate result
+		search::evaluate_results(results, tmp, &multi_result);
+
+		// store results
+		search_results.push_back(multi_result);
+
+
+		// Output
+		if(i == 0){
+			out << "nr\t" << search_config.to_description_string() << "\t" << multi_result.to_description_string() << std::endl;
+			std::cout << "nr\t" << search_config.to_description_string() << "\t" << multi_result.to_description_string() << std::endl;
+		}
+		out << i << "\t" << search_config.to_simple_string() << "\t" << multi_result.to_simple_string() << std::endl;
+		std::cout << i << "\t" <<search_config.to_string() << "\t" << multi_result.to_string() << std::endl;
+
+		if(!filename.empty()){
+			myfile << out.str();
+		}
+	}
+	clock_t clock_end = clock();
+
+
+//	for(int i = 0; i < search_results.size(); ++i){
+//		std::cout << i << ": " << search_results.at(i).best.to_simple_string() << std::endl;
+//		for(int j = 0; j < search_results.at(i).best_results.size(); ++j){
+//			std::cout << j << ":\tscore:" << search_results.at(i).best_results.at(j).score << std::endl;
+//		}
+//	}
+
+	std::stringstream out;
+	out << "\n";
+	out << time_string(clock_start, clock_end, "global search", opts["iterations"].as<int>(),search_results.at(0).best_results.size(), search_results.at(search_results.size()-1).best.score, true);
+	out << "\n\n\n";
+	out << "nr" << "\t" << search_results.at(0).best.to_description_string() << "\tfc" << std::endl;
+	for(int i = 0; i < search_results.size(); ++i){
+		out
+				<< i << "\t"
+				<< search_results.at(i).best.to_simple_string() << "\t"
+				<< search_results.at(i).get_fc() << "\t" << std::endl;
+	}
+
+	if(!filename.empty()){
+		myfile << out.str();
+		myfile.close();
+	}
 
 	return 0;
 }
-
-
