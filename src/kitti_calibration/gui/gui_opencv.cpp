@@ -17,6 +17,7 @@
 #include <image_cloud/common/filter/pcl/depth_filter_radius.hpp>
 #include <image_cloud/common/filter/pcl/depth_filter_neighbors.hpp>
 #include <image_cloud/common/filter/pcl/filter_depth_projection.hpp>
+#include <image_cloud/common/filter/pcl/hit_same_point.hpp>
 #include <image_cloud/common/transform.hpp>
 #include <image_cloud/common/calibration/score.hpp>
 #include <image_cloud/common/filter/cv/inverse_distance_transform.hpp>
@@ -125,7 +126,7 @@ Gui_opencv::init(){
 void Gui_opencv::init_menu_options() {
 	images.resize(7);
 
-	filter3d_names.resize(9);
+	filter3d_names.resize(10);
 	datasets.filter3d_data.resize(filter3d_names.size());
 
 	filter3d_names.at(pcl_filter::OFF) = "off";
@@ -174,6 +175,11 @@ void Gui_opencv::init_menu_options() {
 	filter3d_names.at(pcl_filter::DEPTH_EDGE_PROJECTION) = "depth_edge_projection";
 	datasets.filter3d_data.at(pcl_filter::DEPTH_EDGE_PROJECTION).resize(1);
 	datasets.filter3d_data.at(pcl_filter::DEPTH_EDGE_PROJECTION).at(0).init("neighbors", 3, 50, false);
+
+	filter3d_names.at(pcl_filter::HIT_SAME_POINT) = "hit_same_point";
+	datasets.filter3d_data.at(pcl_filter::HIT_SAME_POINT).resize(1);
+	datasets.filter3d_data.at(pcl_filter::HIT_SAME_POINT).at(0).init("depth", 30, 200, 1, 100 );
+
 
 	filter2d_blur_names.push_back("off");
 	filter2d_blur_names.push_back("bilateral");
@@ -568,6 +574,12 @@ Gui_opencv::filter3d(){
 		{
 			filter_3d::filter_depth_projection(camera_model, transformed, filtred, images[image_filter::FILE_READ].rows, images[image_filter::FILE_READ].cols,
 					datasets.filter3d_data[pcl_filter::DEPTH_EDGE_PROJECTION][0].get_value()); // neighbors); // max distance
+		}
+		break;
+		case pcl_filter::HIT_SAME_POINT:
+		{
+			filter_3d::hit_same_point(camera_model, transformed, filtred, images[image_filter::FILE_READ].rows, images[image_filter::FILE_READ].cols,
+					datasets.filter3d_data[pcl_filter::HIT_SAME_POINT][0].get_value());
 		}
 		break;
 		case pcl_filter::OTHER:
