@@ -27,6 +27,7 @@
 #include <image_cloud/common/calibration/pipeline/image.hpp>
 #include <image_cloud/common/calibration/pipeline/pointcloud.hpp>
 
+
 void find_tf(std::string dataset, std::string output_file,
 		tf::Transform bad_movement, tf::Transform search_startpoint,
 		int min_steps, int max_steps, int max_repeats,
@@ -77,7 +78,7 @@ void find_tf(std::string dataset, std::string output_file,
 			project2d::project_2d(camera_model, transformed, pointcloud_map,
 					pointcloud_projected, image_inverse.cols,
 					image_inverse.rows);
-			filter::filter_depth_intensity<pcl::PointXYZI>(pointcloud_map,
+			filter_3d::filter_depth_intensity<pcl::PointXYZI>(pointcloud_map,
 					filtred, 0.3, 50);
 			pointclouds.push_back(filtred);
 			printf(
@@ -116,9 +117,9 @@ void find_tf(std::string dataset, std::string output_file,
 		search::Multi_search_result result;
 		ros::WallTime time1 = ros::WallTime::now();
 		for (int repeats = 0; repeats < max_repeats; ++repeats) {
-			search::get_best_tf<pcl::PointXYZI, uchar>(search_startpoint, out,
-					camera_model, pointclouds, images, range_axis,
-					range_rotation, i, pre_filtred, &result);
+			search::get_best_tf<pcl::PointXYZI, uchar>(search_startpoint,
+					camera_model, pointclouds, images, result, range_axis,
+					range_rotation, i, pre_filtred);
 		}
 		ros::WallTime time2 = ros::WallTime::now();
 		ros::WallTime single_it;
@@ -136,7 +137,7 @@ void find_tf(std::string dataset, std::string output_file,
 		ss << range_rotation << spacer;
 		ss << pre_filtred << spacer;
 		ss << result.to_string() << std::endl;
-		std::cout << result.in.to_string() << "\n";
+		std::cout << result.center.to_string() << "\n";
 		std::cout << result.best.to_string() << "\n";
 		myfile << ss.str();
 		sum << ss;
