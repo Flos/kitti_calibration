@@ -29,8 +29,9 @@
 
 namespace po = boost::program_options;
 
-void run_filter_set(kitti::Dataset data, int camera, int sequence, int loop,
+void run_filter_set(kitti::Dataset data, int camera, int sequence, tf::Transform search_startpoint, int loop,
 		const std::string& path_out, const bool *enabled) {
+
 	image_geometry::PinholeCameraModel camera_model;
 	data.camera_list.at(camera).get_camera_model(camera_model);
 	cv::Mat image_load, image_inverse;
@@ -45,10 +46,12 @@ void run_filter_set(kitti::Dataset data, int camera, int sequence, int loop,
 	// Transform cam0_to_cam
 	tf::Transform cam0_to_cam;
 	data.camera_list.cameras.at(camera).tf_rect.get_transform(cam0_to_cam);
-	tf::Transform tf_result = (cam0_to_cam * velo_to_cam0);
+	tf::Transform tf_result = (cam0_to_cam * velo_to_cam0*search_startpoint);
 	image_cloud::transform_pointcloud(transformed, tf_result);
+
 	//	// Transform Manual
 	//	image_cloud::transform_pointcloud(transformed, search_startpoint);
+
 	// Messure time for image preparation
 	clock_t time_start = clock();
 	for (int l = 0; l < loop; ++l) {
@@ -67,14 +70,14 @@ void run_filter_set(kitti::Dataset data, int camera, int sequence, int loop,
 	myfile
 			<< time_string(time_start, time_end, "image_filters", loop,
 					image_load.rows, image_load.cols, 0, true);
+
 	for (int i = 0; i < 9; ++i) {
 		if(!enabled[i]) continue;
 		time_start = clock();
 		for (int l = 0; l < loop; ++l) {
 			// Project filter
 			pcl::PointCloud < pcl::PointXYZI > points_filtred;
-			image_cloud::filter3d_switch < pcl::PointXYZI
-					> (transformed, points_filtred, camera_model, camera, sequence, (pcl_filter::Filter3d) i, image_load.rows, image_load.cols);
+			image_cloud::filter3d_switch < pcl::PointXYZI> (transformed, points_filtred, camera_model, (pcl_filter::Filter3d) i, image_load.rows, image_load.cols);
 
 		}
 		time_end = clock();
@@ -82,8 +85,7 @@ void run_filter_set(kitti::Dataset data, int camera, int sequence, int loop,
 		// Create image output
 		pcl::PointCloud < pcl::PointXYZI > points_filtred;
 		assert(points_filtred.size() == 0);
-		image_cloud::filter3d_switch < pcl::PointXYZI
-				> (transformed, points_filtred, camera_model, camera, sequence, (pcl_filter::Filter3d) i, image_load.rows, image_load.cols);
+		image_cloud::filter3d_switch < pcl::PointXYZI> (transformed, points_filtred, camera_model, (pcl_filter::Filter3d) i, image_load.rows, image_load.cols);
 
 		cv::Mat projected_inversed, projected_ori, projected_depth;
 		image_inverse.copyTo(projected_inversed);
@@ -125,32 +127,46 @@ void run_filter_set(kitti::Dataset data, int camera, int sequence, int loop,
 
 int main(int argc, char* argv[]){
 
+	std::vector<float> tf;
+	tf.resize(6);
+
+	for (int i = 0; i < 6; ++i){
+		tf[i] = 0;
+	}
+
 	po::options_description desc("Usage");
 	desc.add_options()
-	("i", po::value<std::string>()->default_value("/media/Daten/kitti/kitti/2011_09_26_drive_0005_sync/"), "kitti dataset to load");
-	desc.add_options()
-	("c", po::value<int>()->default_value(0), "camera");
-	desc.add_options()
-	("s", po::value<int>()->default_value(0), "sequence number");
-	desc.add_options()
-	("l", po::value<int>()->default_value(729), "number of iterations");
-	desc.add_options()
-	("w", po::value<bool>()->default_value(true), "write image files");
-	desc.add_options()
-	("f", po::value<bool>()->default_value(false), "process full kitti dataset");
-	desc.add_options()
-	("p", po::value<std::string>()->default_value(""), "output file prefix");
-	desc.add_options()
+	("help", "Print this help messages")
+	("i", po::value<std::string>()->default_value("/media/Daten/kitti/kitti/2011_09_26_drive_0005_sync/"), "kitti dataset to load")
+	("camera", po::value<int>()->default_value(0), "camera")
+	("s", po::value<int>()->default_value(0), "sequence number")
+	("l", po::value<int>()->default_value(1), "number of iterations")
+	("w", po::value<bool>()->default_value(true), "write image files")
+	("f", po::value<bool>()->default_value(false), "process full kitti dataset")
+	("tf", po::value< std::vector <float > >(&tf)->multitoken(), "transforme: x y z roll pitch yaw")
+	("p", po::value<std::string>()->default_value(""), "output file prefix")
 	("skip", po::value<bool>()->default_value(false), "skip slow algorithms");
 
 	po::variables_map opts;
-	po::store(po::parse_command_line(argc, argv, desc), opts);
+	//po::store(po::parse_command_line(argc, argv, desc), opts);
+	po::store(parse_command_line(argc, argv, desc, po::command_line_style::unix_style ^ po::command_line_style::allow_short), opts);
 
 	try {
 		po::notify(opts);
 	} catch (std::exception& e) {
-		std::cerr << "Error: " << e.what() << "\n";
-		return 1;
+		std::cout << "Error: " << e.what() << "\n";
+		std::cout << desc << std::endl;
+			return 1;
+	}
+
+	/** --help option
+	 */
+
+	if ( opts.count("help")  )
+	{
+		std::cout 	<< "Kitti offline edge calibration" << std::endl
+					<< desc << std::endl;
+		return 0;
 	}
 
 	bool enabled[pcl_filter::NR_ENUMS];
@@ -164,28 +180,31 @@ int main(int argc, char* argv[]){
 	}
 
 	std::string data_path = opts["i"].as<std::string>();
-	int camera = opts["c"].as<int>();
+	int camera = opts["camera"].as<int>();
 	int sequence = opts["s"].as<int>();
 	int loop = opts["l"].as<int>();
 	bool create_files = opts["w"].as<bool>();
 	bool process_all = opts["f"].as<bool>();
 	std::string path_out = opts["p"].as<std::string>();
 
-	tf::Transform search_startpoint, bad_movement;
-	bad_movement.setIdentity();
+	tf::Transform search_startpoint;
 	search_startpoint.setIdentity();
+	search_startpoint.setOrigin(tf::Vector3(tf[0],tf[1],tf[2]));
+	tf::Quaternion q;
+	q.setRPY(tf[3],tf[4],tf[5]);
+	search_startpoint.setRotation(q);
 
 	kitti::Dataset data(data_path);
 
 	if(process_all){
 		for(sequence = 0; sequence < data.pointcloud_file_list.size(); ++sequence){
 			for(camera = 0; camera < data.camera_list.size(); ++camera){
-				run_filter_set(data, camera, sequence, loop, path_out, enabled);
+				run_filter_set(data, camera, sequence, search_startpoint, loop, path_out, enabled);
 			}
 		}
 	}
 	else{
-		run_filter_set(data, camera, sequence, loop, path_out, enabled);
+		run_filter_set(data, camera, sequence, search_startpoint, loop, path_out, enabled);
 	}
 
 //	//
