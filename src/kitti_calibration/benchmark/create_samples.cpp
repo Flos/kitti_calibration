@@ -23,6 +23,7 @@
 #include <image_cloud/common/calibration/pipeline/pointcloud.hpp>
 #include <image_cloud/common/calibration/pipeline/enums.h>
 
+#include <kitti_calibration/common/common.hpp>
 #include <kitti_calibration/common/messure_time.h>
 #include <iostream>
 #include <boost/program_options.hpp>
@@ -52,6 +53,7 @@ void run_filter_set(kitti::Dataset data, int camera, int sequence, tf::Transform
 	//	// Transform Manual
 	//	image_cloud::transform_pointcloud(transformed, search_startpoint);
 
+
 	// Messure time for image preparation
 	clock_t time_start = clock();
 	for (int l = 0; l < loop; ++l) {
@@ -59,19 +61,22 @@ void run_filter_set(kitti::Dataset data, int camera, int sequence, tf::Transform
 		image_cloud::create_inverse_transformed(image_load, image_inverse);
 	}
 	clock_t time_end = clock();
+
+
 	std::ofstream myfile;
 	std::stringstream filename_results;
 	filename_results << path_out << "results_C_" << camera << "_SEQ_"
-			<< sequence << "_P_IN_" << transformed.size() << "_" << loop << ".txt";
+			<< sequence << "_P_IN_" << transformed.size() << "_" << loop+1 << ".txt";
 	myfile.open(filename_results.str().c_str());
+
 	std::cout
-			<< time_string(time_start, time_end, "image_filters", loop,
+			<< "Nr\t" << time_string(time_start, time_end, "image_filters", loop+1,
 					image_load.rows, image_load.cols, 0, true);
 	myfile
-			<< time_string(time_start, time_end, "image_filters", loop,
+			<< time_string(time_start, time_end, "image_filters", loop+1,
 					image_load.rows, image_load.cols, 0, true);
 
-	for (int i = 0; i < 9; ++i) {
+	for (int i = 0; i < pcl_filter::NR_ENUMS; ++i) {
 		if(!enabled[i]) continue;
 		time_start = clock();
 		for (int l = 0; l < loop; ++l) {
@@ -87,21 +92,11 @@ void run_filter_set(kitti::Dataset data, int camera, int sequence, tf::Transform
 		assert(points_filtred.size() == 0);
 		image_cloud::filter3d_switch < pcl::PointXYZI> (transformed, points_filtred, camera_model, (pcl_filter::Filter3d) i, image_load.rows, image_load.cols);
 
-		cv::Mat projected_inversed, projected_ori, projected_depth;
-		image_inverse.copyTo(projected_inversed);
-		image_load.copyTo(projected_ori);
-		projected_depth = cv::Mat::zeros(image_inverse.rows, image_inverse.cols, image_inverse.type());
-		project2d::project_2d(camera_model, points_filtred, projected_inversed,
-				project2d::DEPTH);
-		project2d::project_2d(camera_model, points_filtred, projected_ori,
-				project2d::DEPTH);
-		project2d::project_2d(camera_model, points_filtred, projected_depth,
-						project2d::DEPTH);
 		long unsigned score = 0;
 		score::objective_function<pcl::PointXYZI, uchar>(camera_model,
 				points_filtred, image_inverse, score);
 
-		std::cout
+		std::cout << i << "\t"
 				<< time_string(time_start, time_end,
 						ToString((pcl_filter::Filter3d) i), loop,
 						transformed.size(), points_filtred.size(), score);
@@ -116,19 +111,46 @@ void run_filter_set(kitti::Dataset data, int camera, int sequence, tf::Transform
 				<< "_P_IN_" << transformed.size()
 				<< "_P_OUT_"<< points_filtred.size()
 				<< "_S_" << score;
-		imwrite(filename.str() + "_ori.jpg", image_load);
-		imwrite(filename.str() + "_inv.jpg", image_inverse);
-		imwrite(filename.str() + "_p_ori.jpg", projected_ori);
-		imwrite(filename.str() + "_p_inv.jpg", projected_inversed);
-		imwrite(filename.str() + "_p_depth.jpg", projected_depth);
+
+
+
+//		image_inverse.copyTo(projected_inversed);
+//		image_load.copyTo(projected_ori);
+		cv::Mat image_empty;
+		image_empty = cv::Mat::zeros(image_inverse.rows, image_inverse.cols, image_inverse.type());
+
+//		project2d::project_2d(camera_model, points_filtred, projected_inversed, project2d::DEPTH);
+//		project2d::project_2d(camera_model, points_filtred, projected_ori, project2d::DEPTH);
+//		project2d::project_2d(camera_model, points_filtred, image_empty, project2d::DEPTH);
+
+		tf::Transform tf;
+		tf.setIdentity();
+
+		export_image_with_points(image_load, points_filtred, camera_model, tf, filename.str()+"_ori.jpg" );
+		export_image_with_points(image_load, points_filtred, camera_model, tf, filename.str()+"_p_ori.jpg" );
+		export_image_with_points(image_inverse, points_filtred, camera_model, tf, filename.str()+"_inv.jpg" );
+		export_image_with_points(image_inverse, points_filtred, camera_model, tf, filename.str()+"_p_inv.jpg" );
+		export_image_with_points(image_empty, points_filtred, camera_model, tf, filename.str()+"_p_depth.jpg" );
+		//imwrite(filename.str() + "_ori.jpg", image_load);
+//		imwrite(filename.str() + "_inv.jpg", image_inverse);
+//		imwrite(filename.str() + "_p_ori.jpg", projected_ori);
+//		imwrite(filename.str() + "_p_inv.jpg", projected_inversed);
+//		imwrite(filename.str() + "_p_depth.jpg", image_empty);
 	}
 	myfile.close();
 }
 
 int main(int argc, char* argv[]){
 
-	std::vector<float> tf;
-	tf.resize(6);
+	std::stringstream available_pcl_filters;
+
+	available_pcl_filters << "use numbers to select pcl filters: \n";
+	for (int i = 0; i < pcl_filter::NR_ENUMS; ++i){
+		available_pcl_filters << i << ": " << ToString((pcl_filter::Filter3d)i) << "\n ";
+	}
+
+	std::vector<float> tf;	tf.resize(6);
+	std::vector<int> enabled_filter;
 
 	for (int i = 0; i < 6; ++i){
 		tf[i] = 0;
@@ -142,10 +164,11 @@ int main(int argc, char* argv[]){
 	("s", po::value<int>()->default_value(0), "sequence number")
 	("l", po::value<int>()->default_value(1), "number of iterations")
 	("w", po::value<bool>()->default_value(true), "write image files")
-	("f", po::value<bool>()->default_value(false), "process full kitti dataset")
+	("run", po::value<bool>()->default_value(false), "process all cameras until dataset ends")
 	("tf", po::value< std::vector <float > >(&tf)->multitoken(), "transforme: x y z roll pitch yaw")
 	("p", po::value<std::string>()->default_value(""), "output file prefix")
-	("skip", po::value<bool>()->default_value(false), "skip slow algorithms");
+	("skip", po::value<bool>()->default_value(false), "skip slow algorithms")
+	("filters", po::value<std::vector <int> >(&enabled_filter)->multitoken(), available_pcl_filters.str().c_str());
 
 	po::variables_map opts;
 	//po::store(po::parse_command_line(argc, argv, desc), opts);
@@ -164,7 +187,7 @@ int main(int argc, char* argv[]){
 
 	if ( opts.count("help")  )
 	{
-		std::cout 	<< "Kitti offline edge calibration" << std::endl
+		std::cout 	<< "Kitti offline image sample creator" << std::endl
 					<< desc << std::endl;
 		return 0;
 	}
@@ -173,10 +196,26 @@ int main(int argc, char* argv[]){
 	for (int i = 0; i < pcl_filter::NR_ENUMS; ++i){
 		enabled[i] = true;
 	}
+
 	if(opts["skip"].as<bool>()){
 		// mark slow algorithms to be skipped
 		enabled[pcl_filter::DEPTH_RADIUS] = false;
 		enabled[pcl_filter::NORMAL_DIFF] = false;
+		enabled[pcl_filter::REMOVE_CLUSER_2D_RADIUS_SEARCH] = false;
+		enabled[pcl_filter::REMOVE_CLUSTER_2D] = false;
+	}
+
+	if ( opts.count("filters") && !enabled_filter.empty() ){
+		// Disable all
+		for(int i = 0; i < pcl_filter::NR_ENUMS; ++i)
+		{
+			enabled[i] = false;
+		}
+
+		// Enable selected
+		for(int i = 0; i < enabled_filter.size(); ++i){
+			enabled[enabled_filter[i]] = true;
+		}
 	}
 
 	std::string data_path = opts["i"].as<std::string>();
@@ -184,7 +223,7 @@ int main(int argc, char* argv[]){
 	int sequence = opts["s"].as<int>();
 	int loop = opts["l"].as<int>();
 	bool create_files = opts["w"].as<bool>();
-	bool process_all = opts["f"].as<bool>();
+	bool process_all = opts["run"].as<bool>();
 	std::string path_out = opts["p"].as<std::string>();
 
 	tf::Transform search_startpoint;
@@ -197,7 +236,7 @@ int main(int argc, char* argv[]){
 	kitti::Dataset data(data_path);
 
 	if(process_all){
-		for(sequence = 0; sequence < data.pointcloud_file_list.size(); ++sequence){
+		for( ; sequence < data.pointcloud_file_list.size(); ++sequence){
 			for(camera = 0; camera < data.camera_list.size(); ++camera){
 				run_filter_set(data, camera, sequence, search_startpoint, loop, path_out, enabled);
 			}
