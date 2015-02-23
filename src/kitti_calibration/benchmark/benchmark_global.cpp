@@ -98,16 +98,16 @@ int main(int argc, char* argv[]){
 	("save_images", po::value<bool>()->default_value(true), "write image files")
 	("f", po::value<bool>()->default_value(false), "process full kitti dataset")
 	("p", po::value<std::string>()->default_value(""), "output file prefix")
-	("iterations", po::value<int>(&iterations), "optimation iterration (halves search range per iterration")
+	("iterations", po::value<int>(&iterations), "optimization iteration (halves search range per iteration")
 	("filter", po::value<int>()->default_value(pcl_filter::DEPTH_INTENSITY), available_pcl_filters.str().c_str())
 	("out",	po::value<std::string>()->default_value(""),"calculation output file")
 	("blur",	po::value<bool>()->default_value(true),"blur images")
 	("factor",	po::value<double>()->default_value(0.5),"reduce range step size per iteration using this factor")
 	("precision", po::value<double>(), "if set, calibration runs until precision is reached")
-	("pre_filter", po::value<bool>()->default_value(true), "apply point filter once, before search transformations");
+	("pre_filter", po::value<bool>()->default_value(true), "apply point filter once, before search transformations")
+	("restarts", po::value<int>()->default_value(0), "number of restarts at final destination");
 
 
-	//po::store(po::parse_command_line(argc, argv, desc), opts);
 	po::store(parse_command_line(argc, argv, desc, po::command_line_style::unix_style ^ po::command_line_style::allow_short), opts);
 
 
@@ -138,10 +138,20 @@ int main(int argc, char* argv[]){
 		}
 
 		iterations = 1;
-		double tmp = range[0];
+		double max_translation = 0;
+		double max_rotation = 0;
 
-		while(tmp > opts["precision"].as<double>()){
-			tmp = tmp*opts["factor"].as<double>();
+		for(int i = 0; i < 3; ++i){
+			max_translation = MAX(max_translation, range[i]);
+			max_rotation = MAX(max_rotation, range[3+i]);
+		}
+
+		while(max_translation > opts["precision"].as<double>()
+				|| max_rotation > opts["precision"].as<double>() ){
+
+			max_translation = max_translation*opts["factor"].as<double>();
+			max_rotation = max_rotation*opts["factor"].as<double>();
+
 			++iterations;
 		}
 		std::cout 	<< "\nInfo: Precision was set to: " << opts["precision"].as<double>() << ", set iterations to: " << iterations << std::endl;
