@@ -68,8 +68,8 @@ int main(int argc, char* argv[]){
 	for (int i = 0; i < pcl_filter::NR_ENUMS; ++i){
 		available_pcl_filters << i << ": " << ToString((pcl_filter::Filter3d)i) << "\n ";
 	}
-	std::vector<float> range;
-	std::vector<float> start;
+	std::vector<double> range;
+	std::vector<double> start;
 	std::vector<int> steps;
 	range.resize(6);
 	start.resize(6);
@@ -84,7 +84,7 @@ int main(int argc, char* argv[]){
 		range[i] = 0.01;
 		start[i] = 0;
 	}
-	//std::vector<float>() range {0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
+	//std::vector<double>() range {0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
 	po::options_description desc("Usage");
 	desc.add_options()
 	("help", "Print this help messages")
@@ -92,9 +92,9 @@ int main(int argc, char* argv[]){
 	("camera", po::value<int>()->default_value(0), "camera nr")
 	("seq", po::value<int>()->default_value(0), "sequence number")
 	("window", po::value<int>()->default_value(1), "sliding window size")
-	("range", po::value< std::vector<float> >(&range)->multitoken(), "search range: x y z roll pitch yaw")
+	("range", po::value< std::vector<double> >(&range)->multitoken(), "search range: x y z roll pitch yaw")
 	("steps", po::value< std::vector<int> >(&steps)->multitoken(), "steps: x y z roll pitch yaw")
-	("tf", po::value< std::vector <float > >(&start)->multitoken(), "start transforme: x y z roll pitch yaw")
+	("tf", po::value< std::vector <double > >(&start)->multitoken(), "start transforme: x y z roll pitch yaw")
 	("save_images", po::value<bool>()->default_value(true), "write image files")
 	("f", po::value<bool>()->default_value(false), "process full kitti dataset")
 	("p", po::value<std::string>()->default_value(""), "output file prefix")
@@ -102,8 +102,8 @@ int main(int argc, char* argv[]){
 	("filter", po::value<int>()->default_value(pcl_filter::DEPTH_INTENSITY), available_pcl_filters.str().c_str())
 	("out",	po::value<std::string>()->default_value(""),"calculation output file")
 	("blur",	po::value<bool>()->default_value(true),"blur images")
-	("factor",	po::value<float>()->default_value(0.5),"reduce range step size per iteration using this factor")
-	("precision", po::value<float>(), "if set, calibration runs until precision is reached")
+	("factor",	po::value<double>()->default_value(0.5),"reduce range step size per iteration using this factor")
+	("precision", po::value<double>(), "if set, calibration runs until precision is reached")
 	("pre_filter", po::value<bool>()->default_value(true), "apply point filter once, before search transformations");
 
 
@@ -132,23 +132,22 @@ int main(int argc, char* argv[]){
 
 	if( opts.count("precision") )
 	{
-		if(!(opts["factor"].as<float>() < 1)){
-			std::cout << "ERROR precision cannot be reached. Factor needs to be below of 1.0 but set to: " << opts["factor"].as<float>() << std::endl;
+		if(!(opts["factor"].as<double>() < 1)){
+			std::cout << "ERROR precision cannot be reached. Factor needs to be below of 1.0 but set to: " << opts["factor"].as<double>() << std::endl;
 			return 1;
 		}
 
 		iterations = 1;
-		float tmp = range[0];
+		double tmp = range[0];
 
-		while(tmp > opts["precision"].as<float>()){
-			tmp = tmp*opts["factor"].as<float>();
+		while(tmp > opts["precision"].as<double>()){
+			tmp = tmp*opts["factor"].as<double>();
 			++iterations;
 		}
-		std::cout 	<< "\nInfo: Precision was set to: " << opts["precision"].as<float>() << ", set iterations to: " << iterations << std::endl;
+		std::cout 	<< "\nInfo: Precision was set to: " << opts["precision"].as<double>() << ", set iterations to: " << iterations << std::endl;
 	}
 
-	search::Search_value best_result;
-	best_result.init(start[0], start[1], start[2], start[3], start[4], start[5], 0);
+	search::search_value best_result(start[0], start[1], start[2], start[3], start[4], start[5], 0);
 
 	std::cout << "Opening KITTI dataset..." << spacer;
 	timing.push_back(clock());
@@ -159,9 +158,10 @@ int main(int argc, char* argv[]){
 	std::cout << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1)) << "\n";
 
 	// Create buffers for search and results
-	std::vector<search::Search_setup> search_configs;
-	std::vector<search::Multi_search_result> search_results;
-	std::vector<search::Search_value> search_chosen_tfs;
+	search::search_setup_vector search_configs;
+	search::multi_search_results_vector search_results;
+
+	search::search_value search_chosen_tfs;
 
 	// load and prepare kitti data
 	std::deque<cv::Mat> list_images_raw,list_images_filtred;
@@ -218,15 +218,14 @@ int main(int argc, char* argv[]){
 		timing.push_back(clock());
 		std::stringstream out;
 
-		search::Multi_search_result multi_result;
-		std::vector<search::Search_value> results;
-
+		search::multi_search_results multi_result;
+		search::search_value_vector results;
 
 		// Create table for console output
 		if(i==0){
 			// print description
-			search::Search_value search_desctiption;
-			std::cout << "N" << spacer << search_desctiption.to_description_string() << spacer << "fc" << spacer << "total";
+			search::search_value search_description;
+			std::cout << "N" << spacer << search_description.to_description_string() << spacer << "fc" << spacer << "total";
 			for(int j = 0; j<6; ++j){
 				std::cout << spacer << labels[j];
 			}
@@ -243,7 +242,7 @@ int main(int argc, char* argv[]){
 			// print old and calulate new range
 			for(int j = 0; j<6 ;++j){
 				std::cout << spacer << range[j] ;
-				range[j] = range[j]*opts["factor"].as<float>();
+				range[j] = range[j]*opts["factor"].as<double>();
 			}
 
 			// Print previous loop time
@@ -251,9 +250,9 @@ int main(int argc, char* argv[]){
 			std::cout << std::endl;
 		}
 
-		get_best_search_value(search_results, best_result);
+		search_results.get_best_search_value(best_result);
 		// setup grid search
-		search::Search_setup search_config(best_result.get_transform(), range, steps);
+		search::search_setup search_config(best_result.get_transform(), range, steps);
 
 		search::grid_setup(search_config, results);
 

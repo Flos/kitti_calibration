@@ -114,10 +114,10 @@ void find_tf(std::string dataset, std::string output_file,
 		// Preparation:
 		std::stringstream ss;
 		tf::Transform out;
-		search::Multi_search_result result;
+		search::multi_search_results result;
 		ros::WallTime time1 = ros::WallTime::now();
 		for (int repeats = 0; repeats < max_repeats; ++repeats) {
-			search::get_best_tf<pcl::PointXYZI, uchar>(search_startpoint,
+			search::setup_and_calculate_best_tf<pcl::PointXYZI, uchar>(search_startpoint,
 					camera_model, pointclouds, images, result, range_axis,
 					range_rotation, i, pre_filtred);
 		}
@@ -127,7 +127,7 @@ void find_tf(std::string dataset, std::string output_file,
 		delta = (time2 - time1);
 		single_it.sec = delta.sec / max_repeats;
 		single_it.nsec = delta.nsec / max_repeats;
-		ss << i << spacer << result.nr_total << spacer;
+		ss << i << spacer << result.size() << spacer;
 		ss << max_repeats << spacer;
 		ss << delta.sec << spacer;
 		ss << delta.nsec << spacer;

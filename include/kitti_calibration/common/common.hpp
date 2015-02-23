@@ -75,14 +75,6 @@ void pre_filter_images(const	std::deque<cv::Mat> &in_list_images,
 	}
 }
 
-void get_best_search_value( const std::vector<search::Multi_search_result>&multi_search, search::Search_value &best_result){
-	for(int i=0; i < multi_search.size(); ++i){
-		if(best_result.score < multi_search.at(i).best.score){
-			best_result = multi_search.at(i).best;
-		}
-	}
-}
-
 
 void pre_filter_points(	const	std::deque<pcl::PointCloud<pcl::PointXYZI> > &in_list_points,
 		const image_geometry::PinholeCameraModel &camera_model,
