@@ -5,6 +5,8 @@
  *      Author: fnolden
  */
 
+#include <ctime>
+
 #ifndef INCLUDE_KITTI_CALIBRATION_COMMON_MESSURE_TIME_H_
 #define INCLUDE_KITTI_CALIBRATION_COMMON_MESSURE_TIME_H_
 
@@ -38,6 +40,20 @@ std::string time_diff(clock_t start, clock_t end){
 	std::stringstream ss;
 	ss << ((double)end - start)/CLOCKS_PER_SEC;
 	return ss.str();
+}
+
+std::string datetime(){
+	time_t rawtime;
+	struct tm * timeinfo;
+	char buffer[80];
+
+	time (&rawtime);
+	timeinfo = localtime(&rawtime);
+
+	strftime(buffer,80,"%d-%m-%Y %I:%M:%S",timeinfo);
+	std::string str(buffer);
+
+	return str;
 }
 
 #endif /* INCLUDE_KITTI_CALIBRATION_COMMON_MESSURE_TIME_H_ */
