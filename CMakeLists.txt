@@ -177,16 +177,16 @@ add_dependencies(benchmark_local
   ${PROJECT_NAME}_gencfg
 )
 
-add_executable(benchmark_global
-  src/${PROJECT_NAME}/benchmark/benchmark_global.cpp
+add_executable(calibration
+  src/${PROJECT_NAME}/calibration/calibration.cpp
 )
 
-target_link_libraries(benchmark_global
+target_link_libraries(calibration
   ${catkin_LIBRARIES}
   kitti
 )
 
-add_dependencies(benchmark_global 
+add_dependencies(calibration 
   ${PROJECT_NAME}_gencfg
 )
 
