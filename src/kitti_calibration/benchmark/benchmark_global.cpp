@@ -25,6 +25,7 @@
 
 #include <kitti_calibration/common/common.hpp>
 #include <kitti_calibration/common/messure_time.h>
+#include <kitti/common/serialization/filenames.h>
 #include <iostream>
 #include <boost/program_options.hpp>
 
@@ -213,18 +214,22 @@ int main(int argc, char* argv[]){
 	timing.push_back(clock());
 	std::cout << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1)) << "\n";
 
-	std::ofstream myfile;
+	std::ofstream file_log;
 	std::string filename = opts["p"].as<std::string>()+opts["log"].as<std::string>();
 	if(!filename.empty()){
-		myfile.open(filename.c_str());
+
+		kitti::filenames::create_folder(filename.c_str());
+
+		file_log.open(filename.c_str());
 
 		//Push all settings into the config
-		myfile << "calib_time:" << spacer << datetime() << std::endl;
-		myfile << "cmdline:" << spacer;
+		file_log << "calib_time:" << spacer << datetime() << std::endl;
+		file_log << "cmdline:" << spacer;
 		for(int i = 0; i < argc; ++i){
-			myfile << std::string(argv[i]) << spacer;
+			file_log << std::string(argv[i]) << spacer;
 		}
-		myfile.flush();
+		file_log << std::endl;
+		file_log.flush();
 	}
 
 	std::cout << "started calibration...\n\n";
@@ -238,13 +243,18 @@ int main(int argc, char* argv[]){
 		{
 			if(best_result_before_restart == best_result)
 			{
-				std::cout << std::endl;
-				std::cout << "Done";
-				std::cout << std::endl;
-				std::cout << "Best solution found after " << r * iterations << " iterations" << std::endl;
-				std::cout << std::endl;
-				std::cout << best_result.to_description_string() << std::endl;
-				std::cout << best_result.to_simple_string() << std::endl;
+				std::stringstream out;
+				out << std::endl;
+				out << "Done";
+				out << std::endl;
+				out << "Maximized score after " << r * iterations << " iterations and "
+						<< time_diff(timing.at(0), timing.at(timing.size()-1)) << " cpu seconds" <<  std::endl;
+				out << std::endl;
+				out << best_result.to_description_string() << std::endl;
+				out << best_result.to_simple_string() << std::endl;
+
+				file_log << out.str();
+				std::cout << out.str();
 				break;
 			}
 
@@ -267,29 +277,29 @@ int main(int argc, char* argv[]){
 			if(i==0){
 				// print description
 				search::search_value search_description;
-				std::cout << "R" << spacer << "N" << spacer << search_description.to_description_string() << spacer << "fc" << spacer << "total";
+				out << "R" << spacer << "N" << spacer << search_description.to_description_string() << spacer << "fc" << spacer << "total";
 				for(int j = 0; j<6; ++j){
-					std::cout << spacer << labels[j];
+					out << spacer << labels[j];
 				}
-				std::cout << spacer << "time";
-				std::cout << std::endl;
+				out << spacer << "time";
+				out << std::endl;
 			}
 			else{
 				// Print previous search result
-				std::cout <<  r << spacer << i-1 << spacer
+				out <<  r << spacer << i-1 << spacer
 									<< best_result.to_simple_string() << spacer
 									<< search_results.at(i-1).get_fc() << spacer
 									<< search_results.at(i-1).best_results.size();
 
 				// print old and calulate new range
 				for(int j = 0; j<6 ;++j){
-					std::cout << spacer << temp_range[j] ;
+					out << spacer << temp_range[j] ;
 					temp_range[j] = temp_range[j]*opts["factor"].as<double>();
 				}
 
 				// Print previous loop time
-				std::cout << spacer << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1));
-				std::cout << std::endl;
+				out << spacer << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1));
+				out << std::endl;
 			}
 
 			search_results.get_best_search_value(best_result);
@@ -317,19 +327,13 @@ int main(int argc, char* argv[]){
 			search_results.push_back(multi_result);
 			search_results.get_best_search_value(best_result);
 
-
 			// Output
-			if(i == 0){
-				out << "r" << spacer << "nr" << spacer << best_result.to_description_string() << spacer << best_result.to_description_string() << spacer << "time" << std::endl;
-				//std::cout << "nr\t" <<  multi_result.to_description_string() << "\t" << search_config.to_description_string() << std::endl;
-			}
-			out << r << spacer << i << spacer << best_result.to_simple_string() << spacer << best_result.to_simple_string() << spacer << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1)) << std::endl;
-			//std::cout << i << "\t" << multi_result.to_string() << "\t" << search_config.to_string() << std::endl;
-
 			if(!filename.empty()){
-				myfile << out.str();
-				myfile.flush();
+				file_log << out.str();
+				file_log.flush();
 			}
+
+			std::cout << out.str();
 
 			// Create images of all best matching
 			if(opts["save_images"].as<bool>()){
@@ -383,8 +387,8 @@ int main(int argc, char* argv[]){
 
 	//std::cout << out.str();
 	if(!filename.empty()){
-		myfile << out.str();
-		myfile.close();
+		file_log << out.str();
+		file_log.close();
 	}
 
 	return 0;
