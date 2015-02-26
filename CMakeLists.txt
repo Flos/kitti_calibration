@@ -204,6 +204,19 @@ add_dependencies(create_samples
   ${PROJECT_NAME}_gencfg
 )
 
+## Create image samples, benchmark times
+add_executable(filter
+  src/${PROJECT_NAME}/filter/filter.cpp
+)
+
+target_link_libraries(filter
+  ${catkin_LIBRARIES}
+  kitti
+)
+
+add_dependencies(filter
+  ${PROJECT_NAME}_gencfg
+)
 
 #############
 ## Install ##
