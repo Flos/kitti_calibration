@@ -15,6 +15,8 @@
 #include <image_cloud/common/calibration/pipeline/pointcloud.hpp>
 #include <image_cloud/common/calibration/pipeline/enums.h>
 
+#include <kitti/common/serialization/filenames.h>
+
 #ifndef INCLUDE_KITTI_CALIBRATION_COMMON_COMMON_HPP_
 #define INCLUDE_KITTI_CALIBRATION_COMMON_COMMON_HPP_
 
@@ -109,6 +111,7 @@ void export_image_with_points(const cv::Mat &image,
 
 	project2d::project_2d<PointT>(camera_model, transformed_points, projected, field);
 
+	kitti::filenames::create_folder(filename);
 	imwrite(filename, projected);
 }
 
