@@ -157,7 +157,7 @@ int main(int argc, char* argv[]){
 		std::cout 	<< "\nInfo: Precision was set to: " << opts["precision"].as<double>() << ", set iterations to: " << iterations << std::endl;
 	}
 
-	search::search_value best_result(start[0], start[1], start[2], start[3], start[4], start[5], 0);
+	search::search_value best_result(start[0], start[1], start[2], start[3], start[4], start[5], 1);
 
 	std::cout << "Opening KITTI dataset..." << spacer;
 	timing.push_back(clock());
@@ -193,15 +193,17 @@ int main(int argc, char* argv[]){
 	timing.push_back(clock());
 	std::cout << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1)) << "\n";
 
+
 	// filter images
-	std::cout << "pre filtering images" << spacer;
+	std::cout << "pre filtering images..." << spacer;
 	pre_filter_images(list_images_raw, list_images_filtred, opts["blur"].as<bool>());
 
 	timing.push_back(clock());
 	std::cout << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1)) << "\n";
 
+
 	// Pre filter points
-	std::cout << "pre filtering points:" << spacer;
+	std::cout << "pre filtering points..." << spacer;
 	if(opts["pre_filter"].as<bool>()){
 		pre_filter_points(list_points_raw, camera_model,
 				(pcl_filter::Filter3d)opts["filter"].as<int>(),
@@ -214,6 +216,7 @@ int main(int argc, char* argv[]){
 	timing.push_back(clock());
 	std::cout << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1)) << "\n";
 
+	// Create detailed log file
 	std::ofstream file_log;
 	std::string filename = opts["p"].as<std::string>()+opts["log"].as<std::string>();
 	if(!filename.empty()){
@@ -232,6 +235,7 @@ int main(int argc, char* argv[]){
 		file_log.flush();
 	}
 
+
 	std::cout << "started calibration...\n\n";
 	search::search_value best_result_before_restart = best_result;
 	clock_t clock_start = clock();
@@ -241,6 +245,7 @@ int main(int argc, char* argv[]){
 	{
 		if(r != 0)
 		{
+			// Done?
 			if(best_result_before_restart == best_result)
 			{
 				std::stringstream out;
@@ -250,8 +255,24 @@ int main(int argc, char* argv[]){
 				out << "Maximized score after " << r * iterations << " iterations and "
 						<< time_diff(timing.at(0), timing.at(timing.size()-1)) << " cpu seconds" <<  std::endl;
 				out << std::endl;
-				out << best_result.to_description_string() << std::endl;
-				out << best_result.to_simple_string() << std::endl;
+				out << "camera" << spacer
+						<< best_result.to_description_string() << spacer
+						<< "precision" << spacer
+						<< "iterations" << spacer
+						<< "sequence" << spacer
+						<< "window" << spacer
+						<< "time" << spacer
+						<< "filter"
+						<< std::endl;
+				out << opts["camera"].as<int>() << spacer
+						<< best_result.to_simple_string() << spacer
+						<< opts["precision"].as<double>() << spacer
+						<< r*iterations << spacer
+						<< opts["seq"].as<int>() << spacer
+						<< opts["window"].as<int>() << spacer
+						<< time_diff(timing.at(0), timing.at(timing.size()-1)) << spacer
+						<< ToString((pcl_filter::Filter3d)opts["filter"].as<int>())
+						<< std::endl;
 
 				file_log << out.str();
 				std::cout << out.str();
@@ -266,12 +287,41 @@ int main(int argc, char* argv[]){
 		// Reset range values
 		std::vector<double> temp_range(range);
 
+
+		// Loop scale factor
 		for(int i = 0; i < iterations; ++i){
 			timing.push_back(clock());
 			std::stringstream out;
 
+			// setup grid search
+			search_results.get_best_search_value(best_result);
+			search::search_setup search_config(best_result, temp_range, steps);
+
+			search::search_value_vector current_results;
+			search::grid_setup(search_config, current_results);
+
+
+			// store current config
+			search_configs.push_back(search_config);
+
+
+			// run grid search
+			if(opts["pre_filter"].as<bool>()){
+				search::calculate<pcl::PointXYZI,uchar>(camera_model, list_points_filtred, list_images_filtred, current_results, true);
+			}
+			else{
+				search::calculate<pcl::PointXYZI,uchar>(camera_model, list_points_raw, list_images_filtred, current_results, false);
+			}
+
+
+			// evaluate result
 			search::multi_search_results multi_result;
-			search::search_value_vector results;
+			multi_result.evaluate(current_results);
+
+			// store results
+			search_results.push_back(multi_result);
+			search_results.get_best_search_value(best_result);
+
 
 			// Create table for console output
 			if(i==0){
@@ -302,38 +352,16 @@ int main(int argc, char* argv[]){
 				out << std::endl;
 			}
 
-			search_results.get_best_search_value(best_result);
-			// setup grid search
-			search::search_setup search_config(best_result.get_transform(), temp_range, steps);
-
-			search::grid_setup(search_config, results);
-
-			// store current config
-			search_configs.push_back(search_config);
-
-			// run grid search
-			if(opts["pre_filter"].as<bool>()){
-				search::calculate<pcl::PointXYZI,uchar>(camera_model, list_points_filtred, list_images_filtred, results, true);
-			}
-			else{
-				search::calculate<pcl::PointXYZI,uchar>(camera_model, list_points_raw, list_images_filtred, results, false);
-			}
-			//run_search(data, opts["camera"].as<int>(), opts["start"].as<int>(), results);
-
-			// evaluate result
-			multi_result.evaluate(results);
-
-			// store results
-			search_results.push_back(multi_result);
-			search_results.get_best_search_value(best_result);
 
 			// Output
+			std::cout << out.str();
+			std::cout.flush();
+
 			if(!filename.empty()){
 				file_log << out.str();
 				file_log.flush();
 			}
 
-			std::cout << out.str();
 
 			// Create images of all best matching
 			if(opts["save_images"].as<bool>()){
@@ -345,7 +373,7 @@ int main(int argc, char* argv[]){
 						//<< "_N_" << i
 						//<< "_T_" << best_result.to_simple_string()
 						<< "_"
-						<< r*iterations + i // simple numbering
+						<< kitti::filenames::sequence_number(r*iterations + i) // simple numbering
 						<< ".jpg";
 				export_image_with_points<pcl::PointXYZI>(list_images_filtred.at(0), list_points_filtred.at(0), camera_model, tf, filename.str());
 			}
