@@ -218,6 +218,20 @@ add_dependencies(filter
   ${PROJECT_NAME}_gencfg
 )
 
+## color fusion
+add_executable(fusion_cmd
+  src/${PROJECT_NAME}/fusion/fusion.cpp
+)
+
+target_link_libraries(fusion_cmd
+  ${catkin_LIBRARIES}
+  kitti
+)
+
+add_dependencies(fusion_cmd
+  ${PROJECT_NAME}_gencfg
+)
+
 #############
 ## Install ##
 #############
