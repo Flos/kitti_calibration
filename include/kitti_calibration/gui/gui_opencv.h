@@ -70,7 +70,8 @@ enum window_name{
 	MAIN = 0,
 	IMAGE = 1,
 	TRANSFORM = 2,
-	CONFIG = 3
+	CONFIG = 3,
+	CAMERA = 4
 };
 
 }
@@ -129,6 +130,7 @@ public:
 	void create_gui_filter2d();
 	void create_gui_filter3d();
 	void create_static_gui();
+	void create_gui_camera();
 
 	void update_values();
 	void update_image();
@@ -153,6 +155,8 @@ public:
 	std::vector<std::string> filter2d_edge_names;
 	//std::vector<std::vector<Filter_value> >filter_data;
 	Slider tf_data[6];
+
+	Slider camera_slider[4];
 
 	image_geometry::PinholeCameraModel camera_model;
 	pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_file;
