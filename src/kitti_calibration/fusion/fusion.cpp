@@ -34,6 +34,23 @@ namespace po = boost::program_options;
 
 po::variables_map opts;
 
+void transform_points_to_camera(kitti::Dataset data, int camera,
+		search::search_value start_tf,
+		pcl::PointCloud<pcl::PointXYZI> points_transformed,
+		pcl::PointCloud<pcl::PointXYZI>& in_points) {
+	//Transform pointcloud to selected camera
+	tf::Transform velo_to_cam0, cam0_to_cam, tf_result;
+	data.velodyne_to_cam0.get_transform(velo_to_cam0);
+	// Transform cam0_to_cam
+	data.camera_list.cameras.at(camera).tf_rect.get_transform(cam0_to_cam);
+	std::cout << "TF: " << start_tf.to_simple_string();
+	tf_result = velo_to_cam0 * cam0_to_cam;
+	search::search_value final_tf(tf_result);
+	std::cout << "TF_result: " << final_tf.to_string() << std::endl;
+	image_cloud::transform_pointcloud(in_points,
+			tf_result * start_tf.get_transform());
+	points_transformed = in_points;
+}
 
 int main(int argc, char* argv[]){
 	std::vector<clock_t> timing;
@@ -86,40 +103,71 @@ int main(int argc, char* argv[]){
 	std::cout << "\nstarting fusion..." << std::endl;
 
 	image_geometry::PinholeCameraModel camera_model;
-	pcl::PointCloud<pcl::PointXYZI> in_points;
-	pcl::PointCloud<pcl::PointXYZRGB> out_points;
-	cv::Mat image;
+	pcl::PointCloud<pcl::PointXYZRGB> out_points_rgb;
+
 	int camera = opts["camera"].as<int>();
+	int seq = opts["seq"].as<int>();
+	int windows_size = 1;
+
+	// init tf from commandline
 	search::search_value start_tf(start[0], start[1], start[2], start[3], start[4], start[5], 0);
 
 	kitti::Dataset data;
 	data.init(opts["i"].as<std::string>());
-	data.camera_list.at(camera).get_camera_model(camera_model);
-	data.pointcloud_file_list.load_pointcloud(in_points, opts["seq"].as<int>());
-	data.camera_file_list.at(camera).load_image(image, opts["seq"].as<int>());
-
 
 	timing.push_back(clock());
+	std::deque<cv::Mat> list_images;
+	std::deque<pcl::PointCloud<pcl::PointXYZI> > list_points_loaded;
+	std::deque<pcl::PointCloud<pcl::PointXYZI> > list_points_transformed(windows_size);
+	std::deque<pcl::PointCloud<pcl::PointXYZI> > list_points_z(windows_size);
 
-	//Transform pointcloud to selected camera
-	tf::Transform velo_to_cam0;
-	data.velodyne_to_cam0.get_transform(velo_to_cam0);
 
-	// Transform cam0_to_cam
-	tf::Transform cam0_to_cam;
-	data.camera_list.cameras.at(camera).tf_rect.get_transform(cam0_to_cam);
+	// Pointcloud and Images and Transform pointcloud to selected camera
+	load_kitti_data(data, list_images, list_points_loaded, camera_model, camera, seq, windows_size);
 
-	tf::Transform result = cam0_to_cam * velo_to_cam0 * start_tf.get_transform();
+	// Transform pointcloud to user tf
+	image_cloud::transform_pointcloud<pcl::PointXYZI>(list_points_loaded.at(0), list_points_transformed.at(0), start_tf.get_transform());
 
-	image_cloud::transform_pointcloud(in_points, result);
 
-	image_cloud::pointcloud_rgb<pcl::PointXYZI,cv::Vec3b>( camera_model, in_points, image, out_points, opts["color"].as<float>(), opts["distance"].as<float>());
+	// Filter pointcloud in Z axis (color only first hit from image viewport)
+	project2d::Points2d<pcl::PointXYZI> point_map;
+	cv::Mat depth_map = cv::Mat::zeros(list_images.at(0).rows, list_images.at(0).cols, CV_8U);
+	point_map.init(camera_model, list_points_transformed.at(0), depth_map, project2d::DEPTH);
+	point_map.get_points<uchar>(depth_map, list_points_z.at(0), 0);
+
+	// Debug
+	{
+		std::deque<pcl::PointCloud<pcl::PointXYZI> > list_points_edged(windows_size);
+
+		image_cloud::filter3d_switch(list_points_transformed.at(0), list_points_edged.at(0),
+				camera_model, pcl_filter::EDGE_IMAGE_PLANE_2D_RADIUS_SEARCH,
+				list_images.at(0).rows, list_images.at(0).cols);
+
+	//
+		cv::imwrite("fusion_test.jpg", depth_map);
+
+		// Filter edged points in z and project to image
+		project2d::Points2d<pcl::PointXYZI> point_map_filtred;
+		cv::Mat depth_map_filtred = cv::Mat::zeros(list_images.at(0).rows, list_images.at(0).cols, CV_8U);
+		point_map_filtred.init(camera_model, list_points_edged.at(0), depth_map_filtred, project2d::DEPTH);
+		cv::imwrite("fusion_test_filtred.jpg", depth_map_filtred);
+
+		cv::Mat image_projected;
+		list_images.at(0).copyTo(image_projected);
+
+		project2d::project_2d<pcl::PointXYZI>(camera_model, list_points_edged.at(0),image_projected,project2d::DEPTH);
+
+		cv::imwrite("fusion_test_projected.jpg", image_projected);
+	}
+
+	image_cloud::pointcloud_rgb<pcl::PointXYZI, cv::Vec3b>( camera_model, list_points_z.at(0), list_images.at(0), out_points_rgb, opts["color"].as<float>(), opts["distance"].as<float>());
+
 
 	timing.push_back(clock());
 	std::cout << time_diff(timing[timing.size()-2], timing[timing.size()-1]) << " s\n\n";
 
 	kitti::filenames::create_folder(opts["o"].as<std::string>());
-	kitti::io::save_pointcloud(opts["o"].as<std::string>(), out_points);
+	kitti::io::save_pointcloud(opts["o"].as<std::string>(), out_points_rgb);
 
 	return 0;
 }
