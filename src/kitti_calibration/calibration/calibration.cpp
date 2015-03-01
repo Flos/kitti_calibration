@@ -203,7 +203,7 @@ int main(int argc, char* argv[]){
 
 
 	// Pre filter points
-	std::cout << "pre filtering points..." << spacer;
+	std::cout << "pre filtering points with filter " << ToString((pcl_filter::Filter3d)opts["filter"].as<int>()) << "..." << spacer;
 	if(opts["pre_filter"].as<bool>()){
 		pre_filter_points(list_points_raw, camera_model,
 				(pcl_filter::Filter3d)opts["filter"].as<int>(),
@@ -211,6 +211,9 @@ int main(int argc, char* argv[]){
 				list_images_raw.at(0).rows,
 				list_images_raw.at(0).cols
 				);
+	}
+	else{
+		list_points_filtred = list_points_raw;
 	}
 
 	timing.push_back(clock());
@@ -240,6 +243,7 @@ int main(int argc, char* argv[]){
 	search::search_value best_result_before_restart = best_result;
 	clock_t clock_start = clock();
 
+	unsigned int image_nr = 0;
 	// Calibration starts here
 	for(int r = 0; r < opts["restarts"].as<int>(); ++r)
 	{
@@ -262,7 +266,9 @@ int main(int argc, char* argv[]){
 						<< "sequence" << spacer
 						<< "window" << spacer
 						<< "time" << spacer
-						<< "filter"
+						<< "filter" << spacer
+						<< "points_filtred" << spacer
+						<< "points_raw" << spacer
 						<< std::endl;
 				out << opts["camera"].as<int>() << spacer
 						<< best_result.to_simple_string() << spacer
@@ -271,7 +277,9 @@ int main(int argc, char* argv[]){
 						<< opts["seq"].as<int>() << spacer
 						<< opts["window"].as<int>() << spacer
 						<< time_diff(timing.at(0), timing.at(timing.size()-1)) << spacer
-						<< ToString((pcl_filter::Filter3d)opts["filter"].as<int>())
+						<< ToString((pcl_filter::Filter3d)opts["filter"].as<int>()) << spacer
+						<< list_points_filtred.at(0).size() << spacer
+						<< list_points_raw.at(0).size()
 						<< std::endl;
 
 				file_log << out.str();
@@ -295,7 +303,11 @@ int main(int argc, char* argv[]){
 
 			// setup grid search
 			search_results.get_best_search_value(best_result);
+
+
 			search::search_setup search_config(best_result, temp_range, steps);
+			search::search_value previous_result = best_result;
+
 
 			search::search_value_vector current_results;
 			search::grid_setup(search_config, current_results);
@@ -306,17 +318,13 @@ int main(int argc, char* argv[]){
 
 
 			// run grid search
-			if(opts["pre_filter"].as<bool>()){
-				search::calculate<pcl::PointXYZI,uchar>(camera_model, list_points_filtred, list_images_filtred, current_results, true);
-			}
-			else{
-				search::calculate<pcl::PointXYZI,uchar>(camera_model, list_points_raw, list_images_filtred, current_results, false);
-			}
+			search::calculate<pcl::PointXYZI,uchar>(camera_model, list_points_filtred, list_images_filtred, current_results, opts["pre_filter"].as<bool>());
 
 
 			// evaluate result
 			search::multi_search_results multi_result;
 			multi_result.evaluate(current_results);
+
 
 			// store results
 			search_results.push_back(multi_result);
@@ -327,11 +335,13 @@ int main(int argc, char* argv[]){
 			if(i==0){
 				// print description
 				search::search_value search_description;
-				out << "R" << spacer << "N" << spacer << search_description.to_description_string() << spacer << "fc" << spacer << "total";
+				out << "R" << spacer << "N" << spacer << search_description.to_description_string() << spacer
+						<< "fc" << spacer << "total";
 				for(int j = 0; j<6; ++j){
 					out << spacer << labels[j];
 				}
 				out << spacer << "time";
+				out << "points_filtred" << spacer << "points_raw";
 				out << std::endl;
 			}
 			else{
@@ -364,7 +374,11 @@ int main(int argc, char* argv[]){
 
 
 			// Create images of all best matching
-			if(opts["save_images"].as<bool>()){
+			if(opts["save_images"].as<bool>()
+				&&(
+					(r == 0 && i == 0)
+					|| previous_result.score != best_result.score)
+				){
 				tf::Transform tf;
 				best_result.get_transform(tf);
 				std::stringstream filename;
@@ -373,8 +387,9 @@ int main(int argc, char* argv[]){
 						//<< "_N_" << i
 						//<< "_T_" << best_result.to_simple_string()
 						<< "_"
-						<< kitti::filenames::sequence_number(r*iterations + i) // simple numbering
+						<< kitti::filenames::sequence_number(image_nr) // simple numbering
 						<< ".jpg";
+				++image_nr;
 				export_image_with_points<pcl::PointXYZI>(list_images_filtred.at(0), list_points_filtred.at(0), camera_model, tf, filename.str());
 			}
 		}
@@ -395,27 +410,27 @@ int main(int argc, char* argv[]){
 ////		}
 //	}
 
-	timing.push_back(clock());
-	std::cout << "\n\n" << "generating output..." << spacer;
-	std::stringstream out;
-	out << "\n";
-	out << time_string(clock_start, clock_end, "Total Time", iterations, search_results.at(0).best_results.size(), search_results.at(search_results.size()-1).best.score, true);
-	out << "\n\n\n";
-	out << "nr" << "\t" << search_results.at(0).best.to_description_string() << "\tfc" << std::endl;
+//	timing.push_back(clock());
+//	std::cout << "\n\n" << "generating output..." << spacer;
+//	std::stringstream out;
+//	out << "\n";
+//	out << time_string(clock_start, clock_end, "Total Time", iterations, search_results.at(0).best_results.size(), search_results.at(search_results.size()-1).best.score, true);
+//	out << "\n\n\n";
+//	out << "nr" << "\t" << search_results.at(0).best.to_description_string() << "\tfc" << std::endl;
 
-	for(int i = 0; i < search_results.size(); ++i){
-		out
-				<< i << "\t"
-				<< search_results.at(i).best.to_simple_string() << "\t"
-				<< search_results.at(i).get_fc() << "\t" << std::endl;
-	}
-
-	timing.push_back(clock());
-	std::cout << spacer << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1)) << std::endl;
+//	for(int i = 0; i < search_results.size(); ++i){
+//		out
+//				<< i << "\t"
+//				<< search_results.at(i).best.to_simple_string() << "\t"
+//				<< search_results.at(i).get_fc() << "\t" << std::endl;
+//	}
+//
+//	timing.push_back(clock());
+//	std::cout << spacer << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1)) << std::endl;
 
 	//std::cout << out.str();
 	if(!filename.empty()){
-		file_log << out.str();
+		//file_log << out.str();
 		file_log.close();
 	}
 
