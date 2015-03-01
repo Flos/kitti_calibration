@@ -51,6 +51,18 @@ void callback_scale( int pos, void* data)
 
 Gui_opencv::Gui_opencv() {
 	// TODO Auto-generated constructor stub
+	windows_enabled.resize(kitti_calibration::window_name::NR_WINDOWS);
+
+	for (int i = 0; i < windows_enabled.size(); ++i){
+		windows_enabled[i] = 1;
+	}
+
+	window_names.resize(5);
+	window_names[window_name::MAIN] = "selector";
+	window_names[window_name::IMAGE] = "image";
+	window_names[window_name::TRANSFORM] = "manual tf";
+	window_names[window_name::CONFIG] = "settings";
+	window_names[window_name::CAMERA] = "camera settings";
 }
 
 Gui_opencv::~Gui_opencv() {
@@ -58,54 +70,54 @@ Gui_opencv::~Gui_opencv() {
 }
 
 
-void Gui_opencv::init_datasets() {
+void Gui_opencv::init_datasets(int camera, int seq) {
 	for (int i = 0; i < config_files.size(); ++i)
 	{
 		kitti::Dataset city(config_files.at(i));
 		Dataset_config city_conf;
 		datasets.list_config.push_back(city_conf);
 		datasets.list_datasets.push_back(city);
-		datasets.list_config.at(i).pos_image.init("image nr", 0,
+		datasets.list_config.at(i).pos_image.init("image nr", seq,
 				datasets.list_datasets.at(i).camera_file_list.at(0).list.size()
 						- 1);
-		datasets.list_config.at(i).pos_camera.init("camera nr", 0,
+		datasets.list_config.at(i).pos_camera.init("camera nr", camera,
 				datasets.list_datasets.at(i).camera_list.cameras.size() - 1);
 	}
 }
 
 void
-Gui_opencv::init(){
+Gui_opencv::set_gui(std::vector<bool> enabled_windows){
+	windows_enabled = enabled_windows;
+}
+
+void
+Gui_opencv::init(std::vector<std::string> paths_datasets, int camera, int seq, int pcl_filter){
 	//load default values;
 	init_tf();
 	init_menu_options();
 
 	//load datasets
-	config_files.push_back("/media/Daten/kitti/barney/fh-campus-4-recti/0002/");
-	config_files.push_back("/media/Daten/kitti/config_barney_0001.txt");
-	config_files.push_back("/media/Daten/kitti/config_kitti_0005.txt");
-	config_files.push_back("/media/Daten/kitti/config_kitti_0048.txt");
-	config_files.push_back("/media/Daten/kitti/hit_0006.txt");
-	config_files.push_back("/media/Daten/kitti/hit_0006_mod.txt");
-	config_files.push_back("/media/Daten/kitti/barney/graz/0001.txt");
-	config_files.push_back("/media/Daten/kitti/barney/graz/0001_add.txt");
-	config_files.push_back("/media/Daten/kitti/fh-campus-0000.txt");
-	config_files.push_back("/media/Daten/kitti/fh-campus-0001.txt");
+//	config_files.push_back("/media/Daten/kitti/barney/fh-campus-4-recti/0002/");
+//	config_files.push_back("/media/Daten/kitti/config_barney_0001.txt");
+//	config_files.push_back("/media/Daten/kitti/config_kitti_0005.txt");
+//	config_files.push_back("/media/Daten/kitti/config_kitti_0048.txt");
+//	config_files.push_back("/media/Daten/kitti/hit_0006.txt");
+//	config_files.push_back("/media/Daten/kitti/hit_0006_mod.txt");
+//	config_files.push_back("/media/Daten/kitti/barney/graz/0001.txt");
+//	config_files.push_back("/media/Daten/kitti/barney/graz/0001_add.txt");
+//	config_files.push_back("/media/Daten/kitti/fh-campus-0000.txt");
+//	config_files.push_back("/media/Daten/kitti/fh-campus-0001.txt");
+	config_files = paths_datasets;
 
-	init_datasets();
-	window_names.resize(5);
-	window_names[window_name::MAIN] = "selector";
-	window_names[window_name::IMAGE] = "image";
-	window_names[window_name::TRANSFORM] = "manual tf";
-	window_names[window_name::CONFIG] = "settings";
-	window_names[window_name::CAMERA] = "camera settings";
+	init_datasets(camera, seq);
 
 	// Default slider values
-	datasets.pos_dataset.init("set", 7, datasets.list_datasets.size() -1);
+	datasets.pos_dataset.init("set", 0, datasets.list_datasets.size() -1);
 	datasets.processed_image_selector.init("processed image", image_filter::IMAGE_FULL, images.size() -1);
 	datasets.filter2d.blur.init("blur filter", ::image_filter::blur::BLUR, filter2d_blur_names.size() -1);
 	datasets.filter2d.edge.init("edge filter", ::image_filter::edge::MAX, filter2d_edge_names.size() -1);
 	datasets.projection.init("0 = intensity | depth = 1", 0, 1);
-	datasets.pcl_filter.init("pcl filter", pcl_filter::DEPTH_INTENSITY_AND_REMOVE_CLUSER_2D ,filter3d_names.size() -1);
+	datasets.pcl_filter.init("pcl filter", pcl_filter ,filter3d_names.size() -1);
 
 	load_pcl();
 	load_image();
@@ -680,6 +692,9 @@ void Gui_opencv::create_gui_filter2d() {
 }
 
 void Gui_opencv::create_gui_camera(){
+
+	if(!windows_enabled[window_name::CAMERA]) return;
+
 	cv::namedWindow(window_names.at(window_name::CAMERA), CV_GUI_NORMAL);
 
 	camera_slider[0].init("focal_x", camera_model.cameraInfo().P[0],2000,false);
@@ -703,6 +718,7 @@ void Gui_opencv::recreate_config_gui(){
 }
 
 void Gui_opencv::create_gui_manual_tf() {
+	if(!windows_enabled[window_name::TRANSFORM]) return;
 	cv::namedWindow(window_names.at(window_name::TRANSFORM), CV_GUI_EXPANDED);
 	tf_data[0].create_slider(window_names.at(window_name::TRANSFORM), &callback, this);
 	tf_data[1].create_slider(window_names.at(window_name::TRANSFORM), &callback, this);
@@ -718,7 +734,11 @@ Gui_opencv::create_static_gui(){
 	datasets.pcl_filter.create_slider(window_names.at(window_name::MAIN), &callback, this);
 	datasets.filter2d.blur.create_slider(window_names.at(window_name::MAIN), &callback, this);
 	datasets.filter2d.edge.create_slider(window_names.at(window_name::MAIN), &callback, this);
-	datasets.pos_dataset.create_slider(window_names.at(window_name::MAIN), &callback, this);
+
+	// Dataset slider is only needed if more than one Dataset is available
+	if(datasets.list_datasets.size() > 1){
+		datasets.pos_dataset.create_slider(window_names.at(window_name::MAIN), &callback, this);
+	}
 }
 
 void

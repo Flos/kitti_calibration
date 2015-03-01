@@ -71,7 +71,8 @@ enum window_name{
 	IMAGE = 1,
 	TRANSFORM = 2,
 	CONFIG = 3,
-	CAMERA = 4
+	CAMERA = 4,
+	NR_WINDOWS = 5
 };
 
 }
@@ -114,7 +115,8 @@ class Gui_opencv {
 public:
 	Gui_opencv();
 	virtual ~Gui_opencv();
-	void init();
+	void set_gui(std::vector<bool> enabled_windows);
+	void init(std::vector<std::string> paths_datas, int camera = 0, int seq = 0, int pcl_filter = pcl_filter::DEPTH_INTENSITY_AND_REMOVE_CLUSER_2D);
 
 	void load_image();
 	bool load_pcl();
@@ -124,24 +126,30 @@ public:
 
 	void filter3d();
 	void filter2d();
+
 	void project2image(cv::Mat &image, pcl::PointCloud<pcl::PointXYZI>::Ptr cloud);
+
 	void create_gui_general_conf();
-	void recreate_config_gui();
 	void create_gui_filter2d();
 	void create_gui_filter3d();
 	void create_static_gui();
 	void create_gui_camera();
+	void create_gui_manual_tf();
+
+	void recreate_config_gui();
 
 	void update_values();
 	void update_image();
+
 	void loop();
+
 	void init_menu_options();
 	void init_tf();
-	void create_gui_manual_tf();
 
-	void init_datasets();
+	void init_datasets(int camera = 0, int seq = 0);
 
 	Window_names window_names;
+	std::vector<bool> windows_enabled;
 
 	Datasets_list datasets;
 	std::vector<std::string> config_files;
