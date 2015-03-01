@@ -84,7 +84,7 @@ Slider::get_value(){
 	}
 
 	ss << " = " << calculated_val;
-	printf("%s: %f\n%s \n", name.c_str(), calculated_val, ss.str().c_str());
+	//printf("%s: %f\n%s \n", name.c_str(), calculated_val, ss.str().c_str());
 	return calculated_val;
 }
 
