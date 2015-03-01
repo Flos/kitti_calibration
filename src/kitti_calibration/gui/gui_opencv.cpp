@@ -80,6 +80,7 @@ Gui_opencv::init(){
 	init_menu_options();
 
 	//load datasets
+	config_files.push_back("/media/Daten/kitti/barney/fh-campus-4-recti/0002/");
 	config_files.push_back("/media/Daten/kitti/config_barney_0001.txt");
 	config_files.push_back("/media/Daten/kitti/config_kitti_0005.txt");
 	config_files.push_back("/media/Daten/kitti/config_kitti_0048.txt");
@@ -89,7 +90,6 @@ Gui_opencv::init(){
 	config_files.push_back("/media/Daten/kitti/barney/graz/0001_add.txt");
 	config_files.push_back("/media/Daten/kitti/fh-campus-0000.txt");
 	config_files.push_back("/media/Daten/kitti/fh-campus-0001.txt");
-	config_files.push_back("/media/Daten/kitti/barney/fh-campus-4-recti/0002/");
 
 	init_datasets();
 	window_names.resize(5);
@@ -398,7 +398,13 @@ Gui_opencv::update_values()
 	cam_info.P[6] = camera_slider[3].value;
 	camera_model.fromCameraInfo(cam_info);
 
-
+	std::cout <<  "tf:\t"
+			<< tf_data[0].get_value() << "\t"
+			<< tf_data[1].get_value() << "\t"
+			<< tf_data[2].get_value() << "\t"
+			<< tf_data[3].get_value() << "\t"
+			<< tf_data[4].get_value() << "\t"
+			<< tf_data[5].get_value() << "\n";
 }
 
 void
@@ -505,22 +511,21 @@ Gui_opencv::filter3d(){
 	printf("filter3d %d %d\n", datasets.pcl_filter.value, pcl_filter::DEPTH);
 	pcl::PointCloud<pcl::PointXYZI> transformed = *cloud_file;
 
-	// Transforms velo_cam0
-	tf::Transform velo_to_cam0;
-	datasets.list_datasets.at(datasets.pos_dataset.value).velodyne_to_cam0.get_transform(velo_to_cam0);
-
-	// Transform cam0_to_cam
-	tf::Transform cam0_to_cam;
 	int camera = datasets.list_config.at(datasets.pos_dataset.value).pos_camera.value;
 
+	// Look up transforms velo_cam0
+	tf::Transform velo_to_cam0,cam0_to_cam;
+	datasets.list_datasets.at(datasets.pos_dataset.value).velodyne_to_cam0.get_transform(velo_to_cam0);
 	datasets.list_datasets.at(datasets.pos_dataset.value).camera_list.cameras.at(camera).tf_rect.get_transform(cam0_to_cam);
 
-	tf::Transform result = (cam0_to_cam*velo_to_cam0);
-	image_cloud::transform_pointcloud(transformed, result);
+	image_cloud::transform_pointcloud(transformed, velo_to_cam0);
+	image_cloud::transform_pointcloud(transformed, cam0_to_cam);
 
 	// Transform Manual
 	image_cloud::transform_pointcloud<pcl::PointXYZI>(transformed, 	tf_data[0].get_value(), tf_data[1].get_value(), tf_data[2].get_value(),
 														tf_data[3].get_value(), tf_data[4].get_value(), tf_data[5].get_value());
+
+
 	pcl::PointCloud<pcl::PointXYZI> filtred;
 
 	std::vector<std::vector<boost::shared_ptr<pcl::PointXYZI> > > map(images[image_filter::FILE_READ].cols,
