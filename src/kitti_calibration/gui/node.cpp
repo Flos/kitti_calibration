@@ -41,6 +41,7 @@ int main(int argc, char* argv[]){
 	("camera", po::value<int>()->default_value(0), "camera")
 	("seq", po::value<int>()->default_value(0), "sequence number")
 	("filter3d", po::value<int>()->default_value(0), available_pcl_filters.str().c_str())
+	("create_imagefiles", po::value<bool>()->default_value(false), "save create image file of current view" )
 	("gui", po::value< std::vector <bool > >(&enabled_windows)->multitoken(), "GUI elements to show: MAIN,IMAGE,TRANSFORM,CONFIG,CAMERA\nexample  1 1 0 1 1 disables the manual tf gui");
 //		("filter2d", po::value<int>(), available_pcl_filters.str().c_str())
 	;
@@ -73,6 +74,7 @@ int main(int argc, char* argv[]){
 
 	kitti_calibration::Gui_opencv gui;
 	gui.set_gui(enabled_windows);
+	gui.set_export_images(opts["create_imagefiles"].as<bool>());
 	gui.init(kitti_files, opts["camera"].as<int>(), opts["seq"].as<int>(),opts["filter3d"].as<int>());
 
 	return 0;

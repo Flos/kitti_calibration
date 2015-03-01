@@ -63,6 +63,8 @@ Gui_opencv::Gui_opencv() {
 	window_names[window_name::TRANSFORM] = "manual tf";
 	window_names[window_name::CONFIG] = "settings";
 	window_names[window_name::CAMERA] = "camera settings";
+
+	export_images = false;
 }
 
 Gui_opencv::~Gui_opencv() {
@@ -91,22 +93,17 @@ Gui_opencv::set_gui(std::vector<bool> enabled_windows){
 }
 
 void
+Gui_opencv::set_export_images(bool export_images){
+	this->export_images = export_images;
+}
+
+void
 Gui_opencv::init(std::vector<std::string> paths_datasets, int camera, int seq, int pcl_filter){
 	//load default values;
 	init_tf();
 	init_menu_options();
 
 	//load datasets
-//	config_files.push_back("/media/Daten/kitti/barney/fh-campus-4-recti/0002/");
-//	config_files.push_back("/media/Daten/kitti/config_barney_0001.txt");
-//	config_files.push_back("/media/Daten/kitti/config_kitti_0005.txt");
-//	config_files.push_back("/media/Daten/kitti/config_kitti_0048.txt");
-//	config_files.push_back("/media/Daten/kitti/hit_0006.txt");
-//	config_files.push_back("/media/Daten/kitti/hit_0006_mod.txt");
-//	config_files.push_back("/media/Daten/kitti/barney/graz/0001.txt");
-//	config_files.push_back("/media/Daten/kitti/barney/graz/0001_add.txt");
-//	config_files.push_back("/media/Daten/kitti/fh-campus-0000.txt");
-//	config_files.push_back("/media/Daten/kitti/fh-campus-0001.txt");
 	config_files = paths_datasets;
 
 	init_datasets(camera, seq);
@@ -543,7 +540,6 @@ Gui_opencv::filter3d(){
 	std::vector<std::vector<boost::shared_ptr<pcl::PointXYZI> > > map(images[image_filter::FILE_READ].cols,
 						std::vector<boost::shared_ptr<pcl::PointXYZI> > (images[image_filter::FILE_READ].rows));
 
-	printf("vector size: %lu, %lu\n", map.size(),map[0].size());
 
 	Projected_pointcloud<pcl::PointXYZI> projected_pointclouds;
 	project2d::project_2d(camera_model, transformed, map, projected_pointclouds, images[image_filter::FILE_READ].cols, images[image_filter::FILE_READ].rows);
@@ -648,11 +644,13 @@ Gui_opencv::filter3d(){
 	long unsigned score = 0;
 	score::objective_function<pcl::PointXYZI,uchar>(camera_model, filtred, images[image_filter::IMAGE_INVERSE_TRANSFORMED], score);
 
-	imwrite("objective_function.jpg", images[image_filter::IMAGE_INVERSE_TRANSFORMED]);
-	imwrite("projected.jpg", images[image_filter::IMAGE_FULL]);
-	imwrite("original.jpg", images[image_filter::FILE_READ]);
-	imwrite("edgy.jpg", images[image_filter::IMAGE_EDGE]);
-	printf("filter %d in: %lu out: %lu score: %lu \n", (int)datasets.pcl_filter.value, cloud_file->size(), filtred.size(), score);
+	if(export_images){
+		imwrite("objective_function.jpg", images[image_filter::IMAGE_INVERSE_TRANSFORMED]);
+		imwrite("projected.jpg", images[image_filter::IMAGE_FULL]);
+		imwrite("original.jpg", images[image_filter::FILE_READ]);
+		imwrite("edgy.jpg", images[image_filter::IMAGE_EDGE]);
+	}
+	printf("filter %s in: %lu out: %lu score: %lu \n", pcl_filter::ToString((pcl_filter::Filter3d)datasets.pcl_filter.value), cloud_file->size(), filtred.size(), score);
 
 	filter_lock.unlock();
 }

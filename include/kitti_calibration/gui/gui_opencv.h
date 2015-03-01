@@ -116,6 +116,8 @@ public:
 	Gui_opencv();
 	virtual ~Gui_opencv();
 	void set_gui(std::vector<bool> enabled_windows);
+	void set_export_images(bool export_images);
+
 	void init(std::vector<std::string> paths_datas, int camera = 0, int seq = 0, int pcl_filter = pcl_filter::DEPTH_INTENSITY_AND_REMOVE_CLUSER_2D);
 
 	void load_image();
@@ -150,6 +152,7 @@ public:
 
 	Window_names window_names;
 	std::vector<bool> windows_enabled;
+	bool export_images;
 
 	Datasets_list datasets;
 	std::vector<std::string> config_files;
