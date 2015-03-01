@@ -20,7 +20,36 @@
 #ifndef INCLUDE_KITTI_CALIBRATION_COMMON_COMMON_HPP_
 #define INCLUDE_KITTI_CALIBRATION_COMMON_COMMON_HPP_
 
-void load_kitti_data(kitti::Dataset data,
+template <typename PointT>
+void transform_points_to_origin(kitti::Dataset &data, int camera,
+		pcl::PointCloud<PointT>& points) {
+
+	// look up transforms
+	tf::Transform velo_to_cam0, cam0_to_cam;
+	data.velodyne_to_cam0.get_transform(velo_to_cam0);
+	data.camera_list.cameras.at(camera).tf_rect.get_transform(cam0_to_cam);
+
+	// Transform points in reverse order using the inverse tf
+	image_cloud::transform_pointcloud<PointT>(points, cam0_to_cam.inverse());
+	image_cloud::transform_pointcloud<PointT>(points, velo_to_cam0.inverse());
+}
+
+template <typename PointT>
+void transform_points_to_camera(kitti::Dataset &data, int camera,
+		pcl::PointCloud<PointT>& points) {
+
+	// look up transforms
+	tf::Transform velo_to_cam0, cam0_to_cam;
+	data.velodyne_to_cam0.get_transform(velo_to_cam0);
+	data.camera_list.cameras.at(camera).tf_rect.get_transform(cam0_to_cam);
+
+	// Transform points
+	image_cloud::transform_pointcloud<PointT>(points, velo_to_cam0);
+	image_cloud::transform_pointcloud<PointT>(points, cam0_to_cam);
+}
+
+// Pointcloud and Images and Transform pointcloud to selected camera
+void load_kitti_data(kitti::Dataset &data,
 		std::deque<cv::Mat> &list_images,
 		std::deque<pcl::PointCloud<pcl::PointXYZI> > &list_points,
 		image_geometry::PinholeCameraModel &camera_model,
@@ -44,14 +73,7 @@ void load_kitti_data(kitti::Dataset data,
 		data.pointcloud_file_list.load_pointcloud(transformed, sequence+i);
 		//
 		//	Transform PointCloud to camera position
-		tf::Transform velo_to_cam0,cam0_to_cam;
-
-		data.velodyne_to_cam0.get_transform(velo_to_cam0);
-		data.camera_list.cameras.at(camera).tf_rect.get_transform(cam0_to_cam);
-
-		tf::Transform tf_result = (cam0_to_cam * velo_to_cam0);
-
-		image_cloud::transform_pointcloud(transformed, tf_result);
+		transform_points_to_camera(data, camera, transformed);
 		list_points.push_back(transformed);
 	}
 }
