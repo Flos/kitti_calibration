@@ -44,6 +44,12 @@ int main(int argc, char* argv[]){
 		available_pcl_filters << i << ": " << ToString((pcl_filter::Filter3d)i) << "\n ";
 	}
 
+	std::vector<double> start(6);
+
+	for (int i = 0; i < 6; ++i){
+		start[i] = 0;
+	}
+
 	po::options_description desc("Usage");
 	desc.add_options()
 	("help", "Help message")
@@ -51,6 +57,7 @@ int main(int argc, char* argv[]){
 	("camera", po::value<int>()->default_value(0), "camera")
 	("seq", po::value<int>()->default_value(0), "sequence number")
 	("o", po::value<std::string>()->required(), "filtred pcl file")
+	("tf", po::value< std::vector <double > >(&start)->multitoken(), "start transforme: x y z roll pitch yaw")
 	("filter", po::value<int>()->default_value(pcl_filter::DEPTH_INTENSITY), available_pcl_filters.str().c_str());
 
 	po::store(parse_command_line(argc, argv, desc, po::command_line_style::unix_style ^ po::command_line_style::allow_short), opts);
@@ -77,27 +84,46 @@ int main(int argc, char* argv[]){
 
 	std::cout << "\nstarting..." << std::endl;
 
-	image_geometry::PinholeCameraModel camera_model;
-	pcl::PointCloud<pcl::PointXYZI> in_points, out_points;
-	cv::Mat image;
+
+	// init tf from commandline
+	search::search_value start_tf(start[0], start[1], start[2], start[3], start[4], start[5], 0);
+
+	int camera = opts["camera"].as<int>();
+	int windows_size = 1;
 
 	kitti::Dataset data;
 	data.init(opts["i"].as<std::string>());
-	data.camera_list.at(opts["camera"].as<int>()).get_camera_model(camera_model);
-	data.pointcloud_file_list.load_pointcloud(in_points, opts["seq"].as<int>());
-	data.camera_file_list.at(opts["camera"].as<int>()).load_image(image, opts["seq"].as<int>());
 
+	image_geometry::PinholeCameraModel camera_model;
+
+	std::deque<cv::Mat> list_images;
+	std::deque<pcl::PointCloud<pcl::PointXYZI> > list_points;
+	std::deque<pcl::PointCloud<pcl::PointXYZI> > list_filtred_points(windows_size);
+
+	load_kitti_data(data, list_images, list_points, camera_model, camera, opts["seq"].as<int>(), 1);
 
 	std::cout << "Filter " << ToString((pcl_filter::Filter3d)opts["filter"].as<int>()) << " started...";
 	timing.push_back(clock());
 
-	image_cloud::filter3d_switch(in_points, out_points, camera_model, (pcl_filter::Filter3d)opts["filter"].as<int>(), image.rows, image.cols);
+	// Transfrom using the manual tf
+	image_cloud::transform_pointcloud( list_filtred_points.at(0), start_tf.get_transform());
+
+	image_cloud::filter3d_switch(list_points.at(0), list_filtred_points.at(0),
+			camera_model,
+			(pcl_filter::Filter3d)opts["filter"].as<int>(),
+			list_images.at(0).rows, list_images.at(0).cols);
 
 	timing.push_back(clock());
 	std::cout << time_diff(timing[timing.size()-2], timing[timing.size()-1]) << " s\n\n";
 
+	// Points are transformed into the choosen camera frame... Transform them back to the pointcloud origin
+	image_cloud::transform_pointcloud( list_filtred_points.at(0), start_tf.get_transform().inverse());
+
+	transform_points_to_origin(data, camera,  list_filtred_points.at(0));
+
 	kitti::filenames::create_folder(opts["o"].as<std::string>());
-	kitti::io::save_pointcloud(opts["o"].as<std::string>(), out_points);
+	kitti::io::save_pointcloud(opts["o"].as<std::string>(),  list_filtred_points.at(0));
+	std::cout << "out: " <<  list_filtred_points.at(0).size();
 
 	return 0;
 }
