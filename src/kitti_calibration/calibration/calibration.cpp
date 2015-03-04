@@ -76,6 +76,12 @@ int main(int argc, char* argv[]){
 	start.resize(6);
 	steps.resize(6);
 
+	// init weight for score function
+	std::vector<bool> use_weight(pcl_filter::NR_ENUMS);
+	for(int i=0; i<use_weight.size(); ++i){
+		use_weight[i] = 0;
+	}
+
 	int iterations = 1;
 
 	char labels[6] = {'x','y','z','r','p','y'};
@@ -105,6 +111,7 @@ int main(int argc, char* argv[]){
 	("blur",	po::value<bool>()->default_value(true),"blur images")
 	("factor",	po::value<double>()->default_value(0.5),"reduce range step size per iteration using this factor")
 	("precision", po::value<double>(), "if set, calibration runs until precision is reached")
+	("weight", po::value<bool>()->default_value(true), "use weighted score")
 	("pre_filter", po::value<bool>()->default_value(true), "apply point filter once, before search transformations")
 	("restarts", po::value<int>()->default_value(1), "number of restarts at final destination");
 
@@ -128,6 +135,12 @@ int main(int argc, char* argv[]){
 		std::cout 	<< "Kitti offline edge calibration" << std::endl
 					<< desc << std::endl;
 		return 0;
+	}
+
+	if ( opts["weight"].as<bool>() ){
+		use_weight[pcl_filter::DEPTH_EDGE_PROJECTION] = true;
+		use_weight[pcl_filter::DEPTH_RADIUS] = true;
+		use_weight[pcl_filter::DEPTH_EDGE_PROJECTION_AGGREGATED] = true;
 	}
 
 	if( opts.count("precision") )
@@ -218,6 +231,8 @@ int main(int argc, char* argv[]){
 
 	timing.push_back(clock());
 	std::cout << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1)) << "\n";
+	std::cout << "Total points: " << sum_points(list_points_raw) << " after filter: " << sum_points(list_points_filtred) << std::endl;
+
 
 	// Create detailed log file
 	std::ofstream file_log;
@@ -278,8 +293,8 @@ int main(int argc, char* argv[]){
 						<< opts["window"].as<int>() << spacer
 						<< time_diff(timing.at(0), timing.at(timing.size()-1)) << spacer
 						<< ToString((pcl_filter::Filter3d)opts["filter"].as<int>()) << spacer
-						<< list_points_filtred.at(0).size() << spacer
-						<< list_points_raw.at(0).size()
+						<< sum_points(list_points_filtred) << spacer
+						<< sum_points(list_points_raw)
 						<< std::endl;
 
 				file_log << out.str();
@@ -318,7 +333,12 @@ int main(int argc, char* argv[]){
 
 
 			// run grid search
-			search::calculate<pcl::PointXYZI,uchar>(camera_model, list_points_filtred, list_images_filtred, current_results, opts["pre_filter"].as<bool>());
+			search::calculate<pcl::PointXYZI,uchar>(camera_model,
+													list_points_filtred,
+													list_images_filtred,
+													current_results,
+													opts["pre_filter"].as<bool>(),
+													use_weight[opts["filter"].as<int>()]);
 
 
 			// evaluate result
@@ -340,8 +360,7 @@ int main(int argc, char* argv[]){
 				for(int j = 0; j<6; ++j){
 					out << spacer << labels[j];
 				}
-				out << spacer << "time";
-				out << "points_filtred" << spacer << "points_raw";
+				out << spacer << "time" << spacer;
 				out << std::endl;
 			}
 			else{
@@ -358,7 +377,6 @@ int main(int argc, char* argv[]){
 				}
 
 				// Print previous loop time
-				out << spacer << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1));
 				out << std::endl;
 			}
 
