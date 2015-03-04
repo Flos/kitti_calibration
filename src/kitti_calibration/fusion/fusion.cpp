@@ -34,24 +34,6 @@ namespace po = boost::program_options;
 
 po::variables_map opts;
 
-void transform_points_to_camera(kitti::Dataset data, int camera,
-		search::search_value start_tf,
-		pcl::PointCloud<pcl::PointXYZI> points_transformed,
-		pcl::PointCloud<pcl::PointXYZI>& in_points) {
-	//Transform pointcloud to selected camera
-	tf::Transform velo_to_cam0, cam0_to_cam, tf_result;
-	data.velodyne_to_cam0.get_transform(velo_to_cam0);
-	// Transform cam0_to_cam
-	data.camera_list.cameras.at(camera).tf_rect.get_transform(cam0_to_cam);
-	std::cout << "TF: " << start_tf.to_simple_string();
-	tf_result = velo_to_cam0 * cam0_to_cam;
-	search::search_value final_tf(tf_result);
-	std::cout << "TF_result: " << final_tf.to_string() << std::endl;
-	image_cloud::transform_pointcloud(in_points,
-			tf_result * start_tf.get_transform());
-	points_transformed = in_points;
-}
-
 int main(int argc, char* argv[]){
 	std::vector<clock_t> timing;
 	timing.push_back(clock());
@@ -162,6 +144,7 @@ int main(int argc, char* argv[]){
 
 	image_cloud::pointcloud_rgb<pcl::PointXYZI, cv::Vec3b>( camera_model, list_points_z.at(0), list_images.at(0), out_points_rgb, opts["color"].as<float>(), opts["distance"].as<float>());
 
+	//Transform pointcloud back
 
 	timing.push_back(clock());
 	std::cout << time_diff(timing[timing.size()-2], timing[timing.size()-1]) << " s\n\n";
