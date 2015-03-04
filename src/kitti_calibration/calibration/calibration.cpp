@@ -67,7 +67,15 @@ int main(int argc, char* argv[]){
 
 	available_pcl_filters << "pcl filter: \n";
 	for (int i = 0; i < pcl_filter::NR_ENUMS; ++i){
-		available_pcl_filters << i << ": " << ToString((pcl_filter::Filter3d)i) << "\n ";
+		if(i<10) available_pcl_filters << " ";
+		available_pcl_filters << " " << i << ": " << ToString((pcl_filter::Filter3d)i) << "\n";
+	}
+
+	std::stringstream available_edge_filters;
+	available_edge_filters << "image edge filters: \n";
+	for (int i = 0; i < image_filter::edge::NR_ENUMS; ++i){
+		if(i<10) available_pcl_filters << " ";
+		available_edge_filters << i << ": " << ToString((image_filter::edge::Edge)i) << "\n";
 	}
 	std::vector<double> range;
 	std::vector<double> start;
@@ -106,14 +114,15 @@ int main(int argc, char* argv[]){
 	("f", po::value<bool>()->default_value(false), "process full kitti dataset")
 	("p", po::value<std::string>()->default_value(""), "output file prefix")
 	("iterations", po::value<int>(&iterations), "optimization iteration (halves search range per iteration")
-	("filter", po::value<int>()->default_value(pcl_filter::DEPTH_INTENSITY), available_pcl_filters.str().c_str())
 	("log",	po::value<std::string>()->default_value(""),"calibration log file")
 	("blur",	po::value<bool>()->default_value(true),"blur images")
 	("factor",	po::value<double>()->default_value(0.5),"reduce range step size per iteration using this factor")
 	("precision", po::value<double>(), "if set, calibration runs until precision is reached")
 	("weight", po::value<bool>()->default_value(true), "use weighted score")
 	("pre_filter", po::value<bool>()->default_value(true), "apply point filter once, before search transformations")
-	("restarts", po::value<int>()->default_value(1), "number of restarts at final destination");
+	("restarts", po::value<int>()->default_value(1), "number of restarts at final destination")
+	("filter", po::value<int>()->default_value(pcl_filter::DEPTH_INTENSITY), available_pcl_filters.str().c_str())
+	("edge", po::value<int>()->default_value(image_filter::edge::MAX), available_edge_filters.str().c_str());
 
 
 	po::store(parse_command_line(argc, argv, desc, po::command_line_style::unix_style ^ po::command_line_style::allow_short), opts);
@@ -209,7 +218,7 @@ int main(int argc, char* argv[]){
 
 	// filter images
 	std::cout << "pre filtering images..." << spacer;
-	pre_filter_images(list_images_raw, list_images_filtred, opts["blur"].as<bool>());
+	pre_filter_images(list_images_raw, list_images_filtred, opts["blur"].as<bool>(), (image_filter::edge::Edge)opts["edge"].as<int>());
 
 	timing.push_back(clock());
 	std::cout << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1)) << "\n";

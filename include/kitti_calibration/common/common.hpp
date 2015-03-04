@@ -80,7 +80,8 @@ void load_kitti_data(kitti::Dataset &data,
 
 void pre_filter_images(const	std::deque<cv::Mat> &in_list_images,
 								std::deque<cv::Mat> &out_list_images,
-								bool blur = true)
+								bool blur = true,
+								image_filter::edge::Edge image_edge_filter = image_filter::edge::MAX)
 {
 	out_list_images.resize(in_list_images.size());
 
@@ -91,10 +92,10 @@ void pre_filter_images(const	std::deque<cv::Mat> &in_list_images,
 		{
 			cv::Mat blurred;
 			cv::GaussianBlur( in_list_images.at(i), blurred, cv::Size(3, 3 ), 0, 0 );
-			image_cloud::create_inverse_transformed(blurred, out_list_images.at(i));
+			image_cloud::create_inverse_transformed(blurred, out_list_images.at(i), image_edge_filter);
 		}
 		else{
-			image_cloud::create_inverse_transformed(in_list_images.at(i), out_list_images.at(i));
+			image_cloud::create_inverse_transformed(in_list_images.at(i), out_list_images.at(i), image_edge_filter);
 		}
 	}
 }
