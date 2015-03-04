@@ -32,17 +32,20 @@ namespace kitti_calibration {
 void callback( int pos, void* data)
 {
 	Gui_opencv* ct = reinterpret_cast<Gui_opencv*>(data);
+	usleep(1);
 	ct->update_values();
 	ct->update_view();
 }
 
 void callback_image(int pos, void* data){
+	usleep(1);
 	Gui_opencv* ct = reinterpret_cast<Gui_opencv*>(data);
 	ct->update_image();
 }
 
 void callback_scale( int pos, void* data)
 {
+	usleep(1);
 	Gui_opencv* ct = reinterpret_cast<Gui_opencv*>(data);
 	ct->update_values();
 	ct->recreate_config_gui();
@@ -184,8 +187,9 @@ void Gui_opencv::init_menu_options() {
 	datasets.filter3d_data.at(pcl_filter::RANGE_BORDERS).at(0).init("angular_resolution_deg", 4, 200, 1, 100, false, true );
 
 	filter3d_names.at(pcl_filter::DEPTH_EDGE_PROJECTION) = "depth_edge_projection";
-	datasets.filter3d_data.at(pcl_filter::DEPTH_EDGE_PROJECTION).resize(1);
+	datasets.filter3d_data.at(pcl_filter::DEPTH_EDGE_PROJECTION).resize(2);
 	datasets.filter3d_data.at(pcl_filter::DEPTH_EDGE_PROJECTION).at(0).init("neighbors", 3, 50, false);
+	datasets.filter3d_data.at(pcl_filter::DEPTH_EDGE_PROJECTION).at(1).init("threshold", 3, 100, 1, 100, false, true);
 
 	filter3d_names.at(pcl_filter::HIT_SAME_POINT) = "hit_same_point";
 	datasets.filter3d_data.at(pcl_filter::HIT_SAME_POINT).resize(1);
@@ -609,7 +613,8 @@ Gui_opencv::filter3d(){
 		case pcl_filter::DEPTH_EDGE_PROJECTION:
 		{
 			filter_3d::filter_depth_projection(camera_model, transformed, filtred, images[image_filter::FILE_READ].rows, images[image_filter::FILE_READ].cols,
-					datasets.filter3d_data[pcl_filter::DEPTH_EDGE_PROJECTION][0].get_value()); // neighbors); // max distance
+					datasets.filter3d_data[pcl_filter::DEPTH_EDGE_PROJECTION][0].get_value(), // neighbors
+					datasets.filter3d_data[pcl_filter::DEPTH_EDGE_PROJECTION][1].get_value()); // threshold
 		}
 		break;
 		case pcl_filter::HIT_SAME_POINT:
@@ -697,8 +702,8 @@ void Gui_opencv::create_gui_camera(){
 
 	camera_slider[0].init("focal_x", camera_model.cameraInfo().P[0],2000,false);
 	camera_slider[1].init("focal_y", camera_model.cameraInfo().P[5],2000,false);
-	camera_slider[2].init("cx", camera_model.cameraInfo().P[2],2000,false);
-	camera_slider[3].init("cy", camera_model.cameraInfo().P[6],2000,false);
+	camera_slider[2].init("cx", camera_model.cameraInfo().P[2],images.at(0).cols,false);
+	camera_slider[3].init("cy", camera_model.cameraInfo().P[6],images.at(0).rows,false);
 
 	camera_slider[0].create_slider(window_names.at(window_name::CAMERA), &callback, this);
 	camera_slider[1].create_slider(window_names.at(window_name::CAMERA), &callback, this);
