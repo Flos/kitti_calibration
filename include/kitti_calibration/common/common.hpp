@@ -138,6 +138,16 @@ void export_image_with_points(const cv::Mat &image,
 }
 
 
+template <typename PointT>
+long unsigned int sum_points(const	std::deque<pcl::PointCloud<PointT> > &in_list_points){
+	long unsigned int count = 0;
+	for(int i=0; i < in_list_points.size(); ++i){
+		count += in_list_points.at(i).size();
+	}
+
+	return count;
+}
+
 
 
 #endif /* INCLUDE_KITTI_CALIBRATION_COMMON_COMMON_HPP_ */
