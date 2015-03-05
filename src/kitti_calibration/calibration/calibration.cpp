@@ -114,7 +114,7 @@ int main(int argc, char* argv[]){
 	("f", po::value<bool>()->default_value(false), "process full kitti dataset")
 	("p", po::value<std::string>()->default_value(""), "output file prefix")
 	("iterations", po::value<int>(&iterations), "optimization iteration (halves search range per iteration")
-	("log",	po::value<std::string>()->default_value(""),"calibration log file")
+	("log",	po::value<std::string>()->default_value("calibration.log"),"calibration log file")
 	("blur",	po::value<bool>()->default_value(true),"blur images")
 	("factor",	po::value<double>()->default_value(0.5),"reduce range step size per iteration using this factor")
 	("precision", po::value<double>(), "if set, calibration runs until precision is reached")
@@ -246,7 +246,7 @@ int main(int argc, char* argv[]){
 	// Create detailed log file
 	std::ofstream file_log;
 	std::string filename = opts["p"].as<std::string>()+opts["log"].as<std::string>();
-	if(!filename.empty()){
+	if(!opts["p"].as<std::string>().empty()){
 
 		kitti::filenames::create_folder(filename.c_str());
 
@@ -362,6 +362,11 @@ int main(int argc, char* argv[]){
 
 			// Create table for console output
 			if(i==0){
+				out << "\n" << "Expected maximum calibration time: ";
+				time_t max_time = clock() - timing.at(timing.size()-1);
+				max_time = (max_time * opts["restarts"].as<int>() * iterations)/60/omp_get_num_threads();
+				out << time_diff(timing.at(timing.size()-1), max_time) << " minutes";
+				out << "\n\n";
 				// print description
 				search::search_value search_description;
 				out << "R" << spacer << "N" << spacer << search_description.to_description_string() << spacer
@@ -386,6 +391,7 @@ int main(int argc, char* argv[]){
 				}
 
 				// Print previous loop time
+				out << spacer << time_diff(timing.at(timing.size()-1), clock());
 				out << std::endl;
 			}
 
