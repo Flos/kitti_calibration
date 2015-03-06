@@ -106,14 +106,23 @@ void pre_filter_points(	const	std::deque<pcl::PointCloud<pcl::PointXYZI> > &in_l
 		const pcl_filter::Filter3d filter,
 		std::deque<pcl::PointCloud<pcl::PointXYZI> > &out_list_points,
 		int rows = 0,
-		int cols = 0)
+		int cols = 0,
+		search::search_value tf = search::search_value())
 {
 	out_list_points.resize(in_list_points.size());
 
 	#pragma omp parallel for
 	for(int i = 0; i < in_list_points.size(); ++i)
 	{
-		image_cloud::filter3d_switch <pcl::PointXYZI > (in_list_points.at(i), out_list_points.at(i), camera_model, filter, rows, cols);
+		pcl::PointCloud<pcl::PointXYZI> points_transformed = in_list_points.at(i);
+		// Transform points to position
+		image_cloud::transform_pointcloud<pcl::PointXYZI>( points_transformed, tf.get_transform());
+
+		// Filter
+		image_cloud::filter3d_switch<pcl::PointXYZI >(points_transformed, out_list_points.at(i), camera_model, filter, rows, cols);
+
+		// Transform back
+		image_cloud::transform_pointcloud<pcl::PointXYZI>(out_list_points.at(i), tf.get_transform().inverse());
 	}
 }
 
