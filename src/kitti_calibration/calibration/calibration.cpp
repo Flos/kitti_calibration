@@ -121,6 +121,8 @@ int main(int argc, char* argv[]){
 	("weight", po::value<bool>()->default_value(true), "use weighted score")
 	("pre_filter", po::value<bool>()->default_value(true), "apply point filter once, before search transformations")
 	("restarts", po::value<int>()->default_value(1), "number of restarts at final destination")
+	("restart_filter", po::value<bool>()->default_value(true), "filter again after restart of calibration")
+	("min", po::value<bool>()->default_value(true), "start with minimal step size")
 	("filter", po::value<int>()->default_value(pcl_filter::DEPTH_INTENSITY), available_pcl_filters.str().c_str())
 	("edge", po::value<int>()->default_value(image_filter::edge::MAX), available_edge_filters.str().c_str());
 
@@ -231,7 +233,8 @@ int main(int argc, char* argv[]){
 				(pcl_filter::Filter3d)opts["filter"].as<int>(),
 				list_points_filtred,
 				list_images_raw.at(0).rows,
-				list_images_raw.at(0).cols
+				list_images_raw.at(0).cols,
+				best_result
 				);
 	}
 	else{
@@ -312,13 +315,40 @@ int main(int argc, char* argv[]){
 			}
 
 			best_result_before_restart = best_result;
-
 			std::cout << "\n\nRestarting...\n";
+
+			// Filter again?
+			if(opts["restart_filter"].as<bool>()){
+				timing.push_back(clock());
+				std::cout << "filter pointclouds... ";
+				list_points_filtred.clear();
+
+				pre_filter_points(list_points_raw, camera_model,
+						(pcl_filter::Filter3d)opts["filter"].as<int>(),
+						list_points_filtred,
+						list_images_raw.at(0).rows,
+						list_images_raw.at(0).cols,
+						best_result
+						);
+				timing.push_back(clock());
+				std::cout << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1)) << "\n";
+				std::cout << "Total points: " << sum_points(list_points_raw) << " after filter: " << sum_points(list_points_filtred) << std::endl;
+
+			}
 		}
 
 		// Reset range values
 		std::vector<double> temp_range(range);
-
+		for(int j = 0; j<6 ;++j){
+			if(opts["min"].as<bool>())
+			{
+				temp_range[j] = range[j]*pow(opts["factor"].as<double>(),(iterations-1));
+			}
+			else{
+				temp_range[j] = range[j]*pow(opts["factor"].as<double>(),(iterations-1));
+			}
+		}
+		search::search_value previous_result = best_result;
 
 		// Loop scale factor
 		for(int i = 0; i < iterations; ++i){
@@ -330,7 +360,8 @@ int main(int argc, char* argv[]){
 
 
 			search::search_setup search_config(best_result, temp_range, steps);
-			search::search_value previous_result = best_result;
+
+			previous_result = best_result;
 
 
 			search::search_value_vector current_results;
@@ -362,11 +393,14 @@ int main(int argc, char* argv[]){
 
 			// Create table for console output
 			if(i==0){
-				out << "\n" << "Expected maximum calibration time: ";
-				time_t max_time = clock() - timing.at(timing.size()-1);
-				max_time = (max_time * opts["restarts"].as<int>() * iterations)/60/omp_get_num_threads();
-				out << time_diff(timing.at(timing.size()-1), max_time) << " minutes";
-				out << "\n\n";
+				if(r==0)
+				{
+					out << "\n" << "Expected maximum calibration time: ";
+					time_t max_time = clock() - timing.at(timing.size()-1);
+					max_time = (max_time * opts["restarts"].as<int>() * iterations)/(60*omp_get_num_threads());
+					out << time_diff(timing.at(timing.size()-1), max_time) << " minutes";
+					out << "\n\n";
+				}
 				// print description
 				search::search_value search_description;
 				out << "R" << spacer << "N" << spacer << search_description.to_description_string() << spacer
@@ -386,8 +420,14 @@ int main(int argc, char* argv[]){
 
 				// print old and calulate new range
 				for(int j = 0; j<6 ;++j){
-					out << spacer << temp_range[j] ;
-					temp_range[j] = temp_range[j]*opts["factor"].as<double>();
+					out << spacer << temp_range[j];
+					if(opts["min"].as<bool>())
+					{
+						temp_range[j] = range[j]*pow(opts["factor"].as<double>(),(iterations-(i+1)));
+					}
+					else{
+						temp_range[j] = range[j]*pow(opts["factor"].as<double>(),(i));
+					}
 				}
 
 				// Print previous loop time
