@@ -78,6 +78,22 @@ void load_kitti_data(kitti::Dataset &data,
 	}
 }
 
+void pre_filter_image(const	cv::Mat in,
+								cv::Mat &out,
+								bool blur = true,
+								image_filter::edge::Edge image_edge_filter = image_filter::edge::MAX)
+{
+	if(blur)
+	{
+		cv::Mat blurred;
+		cv::GaussianBlur( in, blurred, cv::Size(3, 3 ), 0, 0 );
+		image_cloud::create_inverse_transformed(blurred, out, image_edge_filter);
+	}
+	else{
+		image_cloud::create_inverse_transformed(in, out, image_edge_filter);
+	}
+}
+
 void pre_filter_images(const	std::deque<cv::Mat> &in_list_images,
 								std::deque<cv::Mat> &out_list_images,
 								bool blur = true,
@@ -88,18 +104,28 @@ void pre_filter_images(const	std::deque<cv::Mat> &in_list_images,
 	#pragma omp parallel for
 	for(int i = 0; i < in_list_images.size(); ++i)
 	{
-		if(blur)
-		{
-			cv::Mat blurred;
-			cv::GaussianBlur( in_list_images.at(i), blurred, cv::Size(3, 3 ), 0, 0 );
-			image_cloud::create_inverse_transformed(blurred, out_list_images.at(i), image_edge_filter);
-		}
-		else{
-			image_cloud::create_inverse_transformed(in_list_images.at(i), out_list_images.at(i), image_edge_filter);
-		}
+		pre_filter_image(in_list_images.at(i), out_list_images.at(i), blur, image_edge_filter);
 	}
 }
 
+void pre_filter_points(	const pcl::PointCloud<pcl::PointXYZI> &in_points,
+							const image_geometry::PinholeCameraModel &camera_model,
+							const pcl_filter::Filter3d filter,
+							pcl::PointCloud<pcl::PointXYZI> &out_points,
+							int rows = 0,
+							int cols = 0,
+							search::search_value tf = search::search_value())
+{
+	pcl::PointCloud<pcl::PointXYZI> points_transformed = in_points;
+	// Transform points to position
+	image_cloud::transform_pointcloud<pcl::PointXYZI>( points_transformed, tf.get_transform());
+
+	// Filter
+	image_cloud::filter3d_switch<pcl::PointXYZI >(points_transformed, out_points, camera_model, filter, rows, cols);
+
+	// Transform back
+	image_cloud::transform_pointcloud<pcl::PointXYZI>( out_points, tf.get_transform().inverse());
+}
 
 void pre_filter_points(	const	std::deque<pcl::PointCloud<pcl::PointXYZI> > &in_list_points,
 		const image_geometry::PinholeCameraModel &camera_model,
@@ -114,15 +140,7 @@ void pre_filter_points(	const	std::deque<pcl::PointCloud<pcl::PointXYZI> > &in_l
 	#pragma omp parallel for
 	for(int i = 0; i < in_list_points.size(); ++i)
 	{
-		pcl::PointCloud<pcl::PointXYZI> points_transformed = in_list_points.at(i);
-		// Transform points to position
-		image_cloud::transform_pointcloud<pcl::PointXYZI>( points_transformed, tf.get_transform());
-
-		// Filter
-		image_cloud::filter3d_switch<pcl::PointXYZI >(points_transformed, out_list_points.at(i), camera_model, filter, rows, cols);
-
-		// Transform back
-		image_cloud::transform_pointcloud<pcl::PointXYZI>(out_list_points.at(i), tf.get_transform().inverse());
+		pre_filter_points(in_list_points.at(i), camera_model, filter, out_list_points.at(i), rows, cols, tf);
 	}
 }
 
