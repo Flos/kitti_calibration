@@ -59,7 +59,7 @@ int main(int argc, char* argv[]){
 	("distance", po::value<float>()->default_value(1), "min distance in m")
 	("color", po::value<float>()->default_value(0), "min color value")
 	("o", po::value<std::string>()->required(), "colored pcl file")
-	("tf", po::value< std::vector <double > >(&start)->multitoken(), "start transforme: x y z roll pitch yaw");
+	("tf", po::value< std::vector <double > >(&start)->multitoken(), "tf: pointcloud -> camera: x y z roll pitch yaw");
 
 	po::store(parse_command_line(argc, argv, desc, po::command_line_style::unix_style ^ po::command_line_style::allow_short), opts);
 

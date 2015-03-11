@@ -57,7 +57,7 @@ int main(int argc, char* argv[]){
 	("camera", po::value<int>()->default_value(0), "camera")
 	("seq", po::value<int>()->default_value(0), "sequence number")
 	("o", po::value<std::string>()->required(), "filtred pcl file")
-	("tf", po::value< std::vector <double > >(&start)->multitoken(), "start transforme: x y z roll pitch yaw")
+	("tf", po::value< std::vector <double > >(&start)->multitoken(), "tf: pointcloud -> camera x y z roll pitch yaw")
 	("filter", po::value<int>()->default_value(pcl_filter::DEPTH_INTENSITY), available_pcl_filters.str().c_str());
 
 	po::store(parse_command_line(argc, argv, desc, po::command_line_style::unix_style ^ po::command_line_style::allow_short), opts);
