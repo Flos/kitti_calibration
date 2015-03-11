@@ -190,6 +190,19 @@ add_dependencies(calibration
   ${PROJECT_NAME}_gencfg
 )
 
+add_executable(calibration_online
+  src/${PROJECT_NAME}/calibration/calibration_online.cpp
+)
+
+target_link_libraries(calibration_online
+  ${catkin_LIBRARIES}
+  kitti
+)
+
+add_dependencies(calibration 
+  ${PROJECT_NAME}_gencfg
+)
+
 ## Create image samples, benchmark times
 add_executable(create_samples
   src/${PROJECT_NAME}/benchmark/create_samples.cpp
