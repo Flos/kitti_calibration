@@ -109,11 +109,8 @@ void run_filter_set(kitti::Dataset data, int camera, int sequence, tf::Transform
 		std::cout << out.str();
 
 		std::stringstream filename;
-		filename << path_out << "projected_C_" << camera << "_SEQ_" << sequence << "_"
-				<< ToString((pcl_filter::Filter3d) i)
-				<< "_P_IN_" << transformed.size()
-				<< "_P_OUT_"<< points_filtred.size()
-				<< "_S_" << score;
+		filename << path_out << "projected_C_" << camera << "/"
+				<< ToString((pcl_filter::Filter3d) i) << "_";
 
 		cv::Mat image_empty;
 		image_empty = cv::Mat::zeros(image_inverse.rows, image_inverse.cols, image_inverse.type());
@@ -121,11 +118,11 @@ void run_filter_set(kitti::Dataset data, int camera, int sequence, tf::Transform
 		tf::Transform tf;
 		tf.setIdentity();
 
-		export_image_with_points(image_load, points_filtred, camera_model, tf, filename.str()+"_ori.jpg" );
-		export_image_with_points(image_load, points_filtred, camera_model, tf, filename.str()+"_p_ori.jpg" );
-		export_image_with_points(image_inverse, points_filtred, camera_model, tf, filename.str()+"_inv.jpg" );
-		export_image_with_points(image_inverse, points_filtred, camera_model, tf, filename.str()+"_p_inv.jpg" );
-		export_image_with_points(image_empty, points_filtred, camera_model, tf, filename.str()+"_p_depth.jpg" );
+		export_image_with_points(image_load, points_filtred, camera_model, tf, filename.str()+"ori_" + kitti::filenames::sequence_number(sequence) + ".jpg" );
+		export_image_with_points(image_load, points_filtred, camera_model, tf, filename.str()+"p_ori_" + kitti::filenames::sequence_number(sequence) + ".jpg" );
+		export_image_with_points(image_inverse, points_filtred, camera_model, tf, filename.str()+"inv_" + kitti::filenames::sequence_number(sequence) + ".jpg" );
+		export_image_with_points(image_inverse, points_filtred, camera_model, tf, filename.str()+"p_inv_" + kitti::filenames::sequence_number(sequence) + ".jpg" );
+		export_image_with_points(image_empty, points_filtred, camera_model, tf, filename.str()+"p_depth_" + kitti::filenames::sequence_number(sequence) + ".jpg" );
 	}
 	file_log.close();
 }
@@ -155,7 +152,7 @@ int main(int argc, char* argv[]){
 	("l", po::value<int>()->default_value(1), "number of iterations")
 	("w", po::value<bool>()->default_value(true), "write image files")
 	("run", po::value<bool>()->default_value(false), "process all cameras until dataset ends")
-	("tf", po::value< std::vector <float > >(&tf)->multitoken(), "transforme: x y z roll pitch yaw")
+	("tf", po::value< std::vector <float > >(&tf)->multitoken(), "tf: pointcloud -> camera: x y z roll pitch yaw")
 	("prefix", po::value<std::string>()->default_value(""), "output file prefix")
 	("skip", po::value<bool>()->default_value(false), "skip slow algorithms")
 	("filters", po::value<std::vector <int> >(&enabled_filter)->multitoken(), available_pcl_filters.str().c_str());
