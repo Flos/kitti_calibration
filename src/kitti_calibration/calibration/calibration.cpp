@@ -109,7 +109,7 @@ int main(int argc, char* argv[]){
 	("window", po::value<int>()->default_value(1), "sliding window size")
 	("range", po::value< std::vector<double> >(&range)->multitoken(), "search range: x y z roll pitch yaw")
 	("steps", po::value< std::vector<int> >(&steps)->multitoken(), "steps: x y z roll pitch yaw")
-	("tf", po::value< std::vector <double > >(&start)->multitoken(), "start transforme: x y z roll pitch yaw")
+	("tf", po::value< std::vector <double > >(&start)->multitoken(), "tf start: pointcloud -> camera: x y z roll pitch yaw")
 	("save_images", po::value<bool>()->default_value(true), "write image files")
 	("f", po::value<bool>()->default_value(false), "process full kitti dataset")
 	("p", po::value<std::string>()->default_value(""), "output file prefix")
@@ -152,6 +152,9 @@ int main(int argc, char* argv[]){
 		use_weight[pcl_filter::DEPTH_EDGE_PROJECTION] = true;
 		use_weight[pcl_filter::DEPTH_RADIUS] = true;
 		use_weight[pcl_filter::DEPTH_EDGE_PROJECTION_AGGREGATED] = true;
+		use_weight[pcl_filter::DEPTH_INTENSITY_AND_REMOVE_CLUSER_2D] = true;
+		use_weight[pcl_filter::REMOVE_CLUSER_2D_RADIUS_SEARCH] = true;
+		use_weight[pcl_filter::REMOVE_CLUSTER_2D] = true;
 	}
 
 	if( opts.count("precision") )
@@ -308,6 +311,10 @@ int main(int argc, char* argv[]){
 						<< sum_points(list_points_filtred) << spacer
 						<< sum_points(list_points_raw)
 						<< std::endl;
+				out << std::endl;
+				out << "pointcloud -> camera:" << spacer << best_result.to_simple_string() << std::endl;
+				out << "camera -> pointcloud:" << spacer << search::search_value(best_result.get_transform().inverse(), best_result.score).to_simple_string() << std::endl;
+				out << std::endl;
 
 				file_log << out.str();
 				std::cout << out.str();
@@ -338,7 +345,8 @@ int main(int argc, char* argv[]){
 		}
 
 		// Reset range values
-		std::vector<double> temp_range(range);
+		std::vector<double> temp_range;
+		temp_range.resize(6);
 		for(int j = 0; j<6 ;++j){
 			if(opts["min"].as<bool>())
 			{
