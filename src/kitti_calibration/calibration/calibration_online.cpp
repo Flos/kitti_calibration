@@ -91,7 +91,7 @@ int main(int argc, char* argv[]){
 	("log",	po::value<std::string>()->default_value("calibration.log"),"calibration log file")
 	("blur",	po::value<bool>()->default_value(true),"blur images")
 	("weight", po::value<bool>()->default_value(true), "use weighted score")
-	("filter", po::value<int>()->default_value(pcl_filter::DEPTH_INTENSITY), available_pcl_filters.str().c_str())
+	("filter", po::value<int>()->default_value(pcl_filter::DEPTH_EDGE_PROJECTION), available_pcl_filters.str().c_str())
 	("edge", po::value<int>()->default_value(image_filter::edge::MAX), available_edge_filters.str().c_str());
 
 
@@ -262,13 +262,12 @@ int main(int argc, char* argv[]){
 			list_points_window.push_back(filtred_points);
 		}
 
-
 		// run grid search
 		search::calculate<pcl::PointXYZI,uchar>(camera_model,
 												list_points_window,
 												list_images_window,
 												current_results,
-												false,
+												true,
 												use_weight[opts["filter"].as<int>()]);
 
 
