@@ -110,6 +110,7 @@ int main(int argc, char* argv[]){
 	("range", po::value< std::vector<double> >(&range)->multitoken(), "search range: x y z roll pitch yaw")
 	("steps", po::value< std::vector<int> >(&steps)->multitoken(), "steps: x y z roll pitch yaw")
 	("tf", po::value< std::vector <double > >(&start)->multitoken(), "tf start: pointcloud -> camera: x y z roll pitch yaw")
+	("tf-inv", po::value< std::vector <double > >(&start)->multitoken(), "tf: camera -> pointcloud: x y z roll pitch yaw")
 	("save_images", po::value<bool>()->default_value(true), "write image files")
 	("f", po::value<bool>()->default_value(false), "process full kitti dataset")
 	("p", po::value<std::string>()->default_value(""), "output file prefix")
@@ -185,6 +186,9 @@ int main(int argc, char* argv[]){
 	}
 
 	search::search_value best_result(start[0], start[1], start[2], start[3], start[4], start[5], 1);
+	if(opts.count("tf-inv")){
+		best_result = search::search_value(best_result.get_transform().inverse(), best_result.score);
+	}
 
 	std::cout << "Opening KITTI dataset..." << spacer;
 	timing.push_back(clock());
@@ -271,6 +275,8 @@ int main(int argc, char* argv[]){
 
 	std::cout << "started calibration...\n\n";
 	search::search_value best_result_before_restart = best_result;
+	int r_last = 0;
+	int i_last = 0;
 	clock_t clock_start = clock();
 
 	unsigned int image_nr = 0;
@@ -312,12 +318,13 @@ int main(int argc, char* argv[]){
 						<< sum_points(list_points_raw)
 						<< std::endl;
 				out << std::endl;
+				out << r * iterations << std::endl;
+				out << time_diff(timing.at(0), timing.at(timing.size()-1)) << std::endl;
 				out << "pointcloud -> camera:" << spacer << best_result.to_simple_string() << std::endl;
 				out << "camera -> pointcloud:" << spacer << search::search_value(best_result.get_transform().inverse(), best_result.score).to_simple_string() << std::endl;
-				out << std::endl;
-
 				file_log << out.str();
 				std::cout << out.str();
+				std::cout << std::endl;
 				break;
 			}
 
@@ -361,6 +368,13 @@ int main(int argc, char* argv[]){
 		// Loop scale factor
 		for(int i = 0; i < iterations; ++i){
 			timing.push_back(clock());
+
+			// Done?
+			if(r_last < r && i_last < i){
+				i= iterations;
+				continue; // no chance for changes anymore stop
+			}
+
 			std::stringstream out;
 
 			// setup grid search
@@ -453,6 +467,10 @@ int main(int argc, char* argv[]){
 				file_log.flush();
 			}
 
+			if( previous_result.score != best_result.score){
+				r_last = r;
+				i_last = i;
+			}
 
 			// Create images of all best matching
 			if(opts["save_images"].as<bool>()

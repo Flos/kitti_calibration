@@ -118,11 +118,14 @@ void run_filter_set(kitti::Dataset data, int camera, int sequence, tf::Transform
 		tf::Transform tf;
 		tf.setIdentity();
 
-		export_image_with_points(image_load, points_filtred, camera_model, tf, filename.str()+"ori_" + kitti::filenames::sequence_number(sequence) + ".jpg" );
+		pcl::PointCloud < pcl::PointXYZI > empty;
+		export_image_with_points(image_load, empty, camera_model, tf, filename.str()+"ori_" + kitti::filenames::sequence_number(sequence) + ".jpg" );
 		export_image_with_points(image_load, points_filtred, camera_model, tf, filename.str()+"p_ori_" + kitti::filenames::sequence_number(sequence) + ".jpg" );
 		export_image_with_points(image_inverse, points_filtred, camera_model, tf, filename.str()+"inv_" + kitti::filenames::sequence_number(sequence) + ".jpg" );
 		export_image_with_points(image_inverse, points_filtred, camera_model, tf, filename.str()+"p_inv_" + kitti::filenames::sequence_number(sequence) + ".jpg" );
 		export_image_with_points(image_empty, points_filtred, camera_model, tf, filename.str()+"p_depth_" + kitti::filenames::sequence_number(sequence) + ".jpg" );
+		export_image_with_points(image_empty, points_filtred, camera_model, tf, filename.str()+"p_intensity_" + kitti::filenames::sequence_number(sequence) + ".jpg", project2d::INTENSITY);
+
 	}
 	file_log.close();
 }
@@ -136,11 +139,11 @@ int main(int argc, char* argv[]){
 		available_pcl_filters << i << ": " << ToString((pcl_filter::Filter3d)i) << "\n ";
 	}
 
-	std::vector<float> tf;	tf.resize(6);
+	std::vector<double> start;	start.resize(6);
 	std::vector<int> enabled_filter;
 
 	for (int i = 0; i < 6; ++i){
-		tf[i] = 0;
+		start[i] = 0;
 	}
 
 	po::options_description desc("Usage");
@@ -152,7 +155,8 @@ int main(int argc, char* argv[]){
 	("l", po::value<int>()->default_value(1), "number of iterations")
 	("w", po::value<bool>()->default_value(true), "write image files")
 	("run", po::value<bool>()->default_value(false), "process all cameras until dataset ends")
-	("tf", po::value< std::vector <float > >(&tf)->multitoken(), "tf: pointcloud -> camera: x y z roll pitch yaw")
+	("tf", po::value< std::vector <double > >(&start)->multitoken(), "tf start: pointcloud -> camera: x y z roll pitch yaw")
+	("tf-inv", po::value< std::vector <double > >(&start)->multitoken(), "tf: camera -> pointcloud: x y z roll pitch yaw")
 	("prefix", po::value<std::string>()->default_value(""), "output file prefix")
 	("skip", po::value<bool>()->default_value(false), "skip slow algorithms")
 	("filters", po::value<std::vector <int> >(&enabled_filter)->multitoken(), available_pcl_filters.str().c_str());
@@ -213,12 +217,14 @@ int main(int argc, char* argv[]){
 	bool process_all = opts["run"].as<bool>();
 	std::string path_out = opts["prefix"].as<std::string>();
 
-	tf::Transform search_startpoint;
-	search_startpoint.setIdentity();
-	search_startpoint.setOrigin(tf::Vector3(tf[0],tf[1],tf[2]));
-	tf::Quaternion q;
-	q.setRPY(tf[3],tf[4],tf[5]);
-	search_startpoint.setRotation(q);
+	// init tf from commandline
+	search::search_value start_tf(start[0], start[1], start[2], start[3], start[4], start[5], 0);
+
+	if(opts.count("tf-inv")){
+		start_tf = search::search_value(start_tf.get_transform().inverse());
+	}
+
+	tf::Transform search_startpoint = start_tf.get_transform();
 
 	kitti::Dataset data(data_path);
 

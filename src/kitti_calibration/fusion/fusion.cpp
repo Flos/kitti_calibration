@@ -59,7 +59,8 @@ int main(int argc, char* argv[]){
 	("distance", po::value<float>()->default_value(1), "min distance in m")
 	("color", po::value<float>()->default_value(0), "min color value")
 	("o", po::value<std::string>()->required(), "colored pcl file")
-	("tf", po::value< std::vector <double > >(&start)->multitoken(), "tf: pointcloud -> camera: x y z roll pitch yaw");
+	("tf", po::value< std::vector <double > >(&start)->multitoken(), "tf: pointcloud -> camera: x y z roll pitch yaw")
+	("tf-inv", po::value< std::vector <double > >(&start)->multitoken(), "tf: camera -> pointcloud: x y z roll pitch yaw");
 
 	po::store(parse_command_line(argc, argv, desc, po::command_line_style::unix_style ^ po::command_line_style::allow_short), opts);
 
@@ -93,6 +94,10 @@ int main(int argc, char* argv[]){
 
 	// init tf from commandline
 	search::search_value start_tf(start[0], start[1], start[2], start[3], start[4], start[5], 0);
+
+	if(opts.count("tf-inv")){
+		start_tf = search::search_value(start_tf.get_transform().inverse());
+	}
 
 	kitti::Dataset data;
 	data.init(opts["i"].as<std::string>());
@@ -145,6 +150,10 @@ int main(int argc, char* argv[]){
 	image_cloud::pointcloud_rgb<pcl::PointXYZI, cv::Vec3b>( camera_model, list_points_z.at(0), list_images.at(0), out_points_rgb, opts["color"].as<float>(), opts["distance"].as<float>());
 
 	//Transform pointcloud back
+	// Points are transformed into the choosen camera frame... Transform them back to the pointcloud origin
+	image_cloud::transform_pointcloud( out_points_rgb, start_tf.get_transform().inverse());
+
+	transform_points_to_origin(data, camera,  out_points_rgb);
 
 	timing.push_back(clock());
 	std::cout << time_diff(timing[timing.size()-2], timing[timing.size()-1]) << " s\n\n";

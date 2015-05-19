@@ -86,12 +86,14 @@ int main(int argc, char* argv[]){
 	("range", po::value< std::vector<double> >(&range)->multitoken(), "search range: x y z roll pitch yaw")
 	("steps", po::value< std::vector<int> >(&steps)->multitoken(), "steps: x y z roll pitch yaw")
 	("tf", po::value< std::vector <double > >(&start)->multitoken(), "tf start: pointcloud -> camera: x y z roll pitch yaw")
+	("tf-inv", po::value< std::vector <double > >(&start)->multitoken(), "tf: camera -> pointcloud: x y z roll pitch yaw")
 	("save_images", po::value<bool>()->default_value(true), "write image files")
 	("p", po::value<std::string>()->default_value(""), "output file prefix")
 	("log",	po::value<std::string>()->default_value("calibration.log"),"calibration log file")
 	("blur",	po::value<bool>()->default_value(true),"blur images")
 	("weight", po::value<bool>()->default_value(true), "use weighted score")
 	("filter", po::value<int>()->default_value(pcl_filter::DEPTH_EDGE_PROJECTION), available_pcl_filters.str().c_str())
+	("refilter_all", po::value<bool>()->default_value(true), "refilter all pointclouds")
 	("edge", po::value<int>()->default_value(image_filter::edge::MAX), available_edge_filters.str().c_str());
 
 
@@ -127,6 +129,10 @@ int main(int argc, char* argv[]){
 
 	search::search_value best_result(start[0], start[1], start[2], start[3], start[4], start[5], 1);
 
+	if(opts.count("tf-inv")){
+		best_result = search::search_value(best_result.get_transform().inverse(), best_result.score);
+	}
+
 	std::cout << "Opening KITTI dataset..." << spacer;
 	timing.push_back(clock());
 
@@ -142,29 +148,26 @@ int main(int argc, char* argv[]){
 	search::search_value search_chosen_tfs;
 
 	// load and prepare kitti data
-	std::deque<cv::Mat> list_images_raw, list_images_raw_window, list_images_window;
-	std::deque<pcl::PointCloud<pcl::PointXYZI> > list_points_raw, list_points_raw_window, list_points_window;
+	std::deque<cv::Mat> list_images_raw_window, list_images_window;
+	std::deque<pcl::PointCloud<pcl::PointXYZI> > list_points_raw_window, list_points_window;
 	image_geometry::PinholeCameraModel camera_model;
 
 	std::cout << "Buffering data from KITTI dataset..." << spacer;
 	std::cout.flush();
 	timing.push_back(clock());
 	load_kitti_data(data,
-			list_images_raw,
-			list_points_raw,
+			list_images_raw_window,
+			list_points_raw_window,
 			camera_model,
 			opts["camera"].as<int>(),
 			opts["seq"].as<int>(),
-			data.pointcloud_file_list.size()-opts["seq"].as<int>()
+			opts["window"].as<int>()
 			);
 
-	assert( list_images_raw.size() > 0);
-	assert( list_images_raw.size() == list_points_raw.size());
-	assert( list_images_raw.size() >= opts["window"].as<int>());
+	assert( list_points_raw_window.size() > 0);
+	assert( list_images_raw_window.size() == list_points_raw_window.size());
 
 
-	list_images_raw_window.assign(list_images_raw.begin(), list_images_raw.begin() + opts["window"].as<int>());
-	list_points_raw_window.assign(list_points_raw.begin(), list_points_raw.begin() + opts["window"].as<int>());
 
 
 	timing.push_back(clock());
@@ -184,15 +187,15 @@ int main(int argc, char* argv[]){
 	pre_filter_points(list_points_raw_window, camera_model,
 			(pcl_filter::Filter3d)opts["filter"].as<int>(),
 			list_points_window,
-			list_images_raw.at(0).rows,
-			list_images_raw.at(0).cols,
+			list_images_raw_window.at(0).rows,
+			list_images_raw_window.at(0).cols,
 			best_result
 			);
 
 
 	timing.push_back(clock());
 	std::cout << time_diff(timing.at(timing.size()-2), timing.at(timing.size()-1)) << "\n";
-	std::cout << "Total points: " << sum_points(list_points_raw) << " after filter: " << sum_points(list_points_window) << std::endl;
+	std::cout << "Window points: " << sum_points(list_points_raw_window) << " after filter: " << sum_points(list_points_window) << std::endl;
 
 
 	// Create detailed log file
@@ -219,13 +222,14 @@ int main(int argc, char* argv[]){
 	clock_t clock_start = clock();
 
 	unsigned int image_nr = 0;
-	long unsigned int total_points = sum_points(list_points_raw);
+	long unsigned int total_points = sum_points(list_points_raw_window);
 	long unsigned int total_points_filtred = sum_points(list_points_window);
+
+	// Find min data length
+	int data_length = MIN(data.camera_file_list.at(0).size(), data.pointcloud_file_list.size());
+
 	// Calibration starts here
-
-
-	// Loop sequence
-	for(int i = 0; i+opts["window"].as<int>() < list_points_raw.size(); ++i){
+	for(int i = 0; i+opts["window"].as<int>() < data_length - opts["seq"].as<int>(); ++i){
 
 		timing.push_back(clock());
 		std::stringstream out;
@@ -238,29 +242,63 @@ int main(int argc, char* argv[]){
 
 		// Add process next dataset
 		if( i != 0 ){
-			// Remove oldest elements
+			cv::Mat image_filtred, image_raw;
+
+			// Remove fist image from sliding window
 			list_images_window.pop_front();
+			list_images_raw_window.pop_front();
+
+			// Load next image
+			data.camera_file_list.at(opts["camera"].as<int>()).load_image(image_raw, opts["seq"].as<int>() + i );
+
+			list_images_raw_window.push_back(image_raw);
+
+			// Filter next image
+			pre_filter_image(list_images_raw_window.back(), image_filtred, opts["blur"].as<bool>(), (image_filter::edge::Edge)opts["edge"].as<int>());
+
+			// Adde next image to window
+			list_images_window.push_back(image_filtred);
+
+			// remove oldest element from pointcloud
+			list_points_raw_window.pop_front();
 			list_points_window.pop_front();
 
-			// Filter image and pointcloud
-			pcl::PointCloud<pcl::PointXYZI> filtred_points;
-			cv::Mat filtred_image;
+			// Load new pointcloud from file and append it
+			list_points_raw_window.push_back(load_pointcloud(data, opts["seq"].as<int>() + i, opts["camera"].as<int>()));
 
-			pre_filter_image(list_images_raw.at(i + opts["window"].as<int>()), filtred_image, opts["blur"].as<bool>(), (image_filter::edge::Edge)opts["edge"].as<int>());
-			pre_filter_points(list_points_raw.at(i + opts["window"].as<int>()),
-													camera_model,
-													(pcl_filter::Filter3d)opts["filter"].as<int>(),
-													filtred_points,
-													list_images_raw.at(0).rows,
-													list_images_raw.at(0).cols,
-													best_result );
+			if(opts["refilter_all"].as<bool>())
+			{
 
-			total_points_filtred+= filtred_points.size();
+				list_points_window.clear();
 
-			// Add new data to window
-			list_images_window.push_back(filtred_image);
-			list_points_window.push_back(filtred_points);
+				pre_filter_points(	list_points_raw_window,
+										camera_model,
+										(pcl_filter::Filter3d)opts["filter"].as<int>(),
+										list_points_window,
+										list_images_window.at(0).rows,
+										list_images_window.at(0).cols,
+										best_result);
+			}
+			else{
+				// Filter image and pointcloud
+				pcl::PointCloud<pcl::PointXYZI> filtred_points;
+
+				pre_filter_points(	list_points_raw_window.back(),
+										camera_model,
+										(pcl_filter::Filter3d)opts["filter"].as<int>(),
+										filtred_points,
+										list_images_window.at(0).rows,
+										list_images_window.at(0).cols,
+										best_result );
+
+				// Add new data to window
+				list_points_window.push_back(filtred_points);
+			}
+
+			total_points_filtred+= list_points_window.back().size();
+			total_points+=list_points_raw_window.back().size();
 		}
+
 
 		// run grid search
 		search::calculate<pcl::PointXYZI,uchar>(camera_model,

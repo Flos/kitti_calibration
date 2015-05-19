@@ -48,6 +48,17 @@ void transform_points_to_camera(kitti::Dataset &data, int camera,
 	image_cloud::transform_pointcloud<PointT>(points, cam0_to_cam);
 }
 
+pcl::PointCloud<pcl::PointXYZI> load_pointcloud(kitti::Dataset &data, int index, int camera=0){
+	// Load Pointcloud
+	pcl::PointCloud < pcl::PointXYZI > transformed;
+	data.pointcloud_file_list.load_pointcloud(transformed, index);
+	//
+	//	Transform PointCloud to camera position
+	transform_points_to_camera(data, camera, transformed);
+
+	return transformed;
+}
+
 // Pointcloud and Images and Transform pointcloud to selected camera
 void load_kitti_data(kitti::Dataset &data,
 		std::deque<cv::Mat> &list_images,
@@ -70,11 +81,7 @@ void load_kitti_data(kitti::Dataset &data,
 
 		// Load Pointcloud
 		pcl::PointCloud < pcl::PointXYZI > transformed;
-		data.pointcloud_file_list.load_pointcloud(transformed, sequence+i);
-		//
-		//	Transform PointCloud to camera position
-		transform_points_to_camera(data, camera, transformed);
-		list_points.push_back(transformed);
+		list_points.push_back(load_pointcloud(data, sequence+i, camera));
 	}
 }
 

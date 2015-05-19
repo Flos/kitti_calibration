@@ -58,6 +58,7 @@ int main(int argc, char* argv[]){
 	("seq", po::value<int>()->default_value(0), "sequence number")
 	("o", po::value<std::string>()->required(), "filtred pcl file")
 	("tf", po::value< std::vector <double > >(&start)->multitoken(), "tf: pointcloud -> camera x y z roll pitch yaw")
+	("tf-inv", po::value< std::vector <double > >(&start)->multitoken(), "tf: camera -> pointcloud: x y z roll pitch yaw")
 	("filter", po::value<int>()->default_value(pcl_filter::DEPTH_INTENSITY), available_pcl_filters.str().c_str());
 
 	po::store(parse_command_line(argc, argv, desc, po::command_line_style::unix_style ^ po::command_line_style::allow_short), opts);
@@ -87,6 +88,10 @@ int main(int argc, char* argv[]){
 
 	// init tf from commandline
 	search::search_value start_tf(start[0], start[1], start[2], start[3], start[4], start[5], 0);
+
+	if(opts.count("tf-inv")){
+		start_tf = search::search_value(start_tf.get_transform().inverse());
+	}
 
 	int camera = opts["camera"].as<int>();
 	int windows_size = 1;
